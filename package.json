@@ -1,0 +1,30 @@
+{
+  "name": "remindmebot",
+  "version": "0.0.1",
+  "description": "Chatbot-reminder for FB Messenger",
+  "main": "app.js",
+  "scripts": {
+    "test": "remindmebot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IuriiD/remindmebot.git"
+  },
+  "keywords": [
+    "chatbot",
+    "fb",
+    "messenger",
+    "bot"
+  ],
+  "author": "iurii.dziuban@gmail.com",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/IuriiD/remindmebot/issues"
+  },
+  "dependencies": {
+    "express": "~4.16.3",
+    "body-parser": "~1.18.3",
+    "request": "~2.86.0",
+    "apiai": "~4.0.3"
+  }
+}
