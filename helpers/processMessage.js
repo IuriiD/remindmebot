@@ -1,7 +1,7 @@
 const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
 const apiAiClient = require('apiai')(API_AI_TOKEN);
 
-const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAGcYjBtZBaIAjnNIrpbNYcsoNWQRLOo1yanXxhTsGsaGsfi7CDHwJZClrV9P4Qz0aXEi1KPEZAcyzO0JcMDWMvWwLq7AoM7iCEDVYa2ZClkcVF5FxqhOrseUvA0w0nIayyaasqnT1zMEkAsvEf8FepVsgsotqGrAyTLLbyZAFRxj3scGrFsEZD';
+const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAO0hMjmlp9ASuciijPKDbX9Lrv5ZAECz5m8PUGdAx6DO9UX9xlFSNuEcML9ZBqXg56yET4sJZCNOIqHRIQczfAZAZCG0KEZAHlTwLcvnouCeTg6MSONzzNyM1MbSuLqHqjp4SMoXjfg4vK2EI3Uu5hdcJZCpyJX6tXyGdVt09PhXtWMp7CVqQgZD';
 const request = require('request');
 
 const sendTextMessage = (senderId, text) => {

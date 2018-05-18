@@ -22,9 +22,10 @@
     "url": "https://github.com/IuriiD/remindmebot/issues"
   },
   "dependencies": {
-    "express": "~4.16.3",
+    "apiai": "~4.0.3",
     "body-parser": "~1.18.3",
-    "request": "~2.86.0",
-    "apiai": "~4.0.3"
+    "express": "~4.16.3",
+    "mongodb": "~3.1.0-beta4",
+    "request": "~2.86.0"
   }
 }
