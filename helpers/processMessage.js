@@ -20,6 +20,10 @@ module.exports = (event) => {
     const senderId = event.sender.id;
     const message = event.message.text;
 
+    console.log();
+    console.log('message from FB: ');
+    console.log(message);
+
     const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot'});
 
     apiaiSession.on('response', (response) => {
