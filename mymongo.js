@@ -1,8 +1,9 @@
 /*
 "Simplifications" in MVP:
 -   reminders can be set with recurrence only "daily"/"weekly"/"monthly"[= every 30 days] from current day,
-    no no custom format (for eg., weekly on Tue and Wed; on week days etc) and no "ends on"/till feature -
-    all reminders besides those that execute "once", are repeated forever
+    no custom format (for eg., weekly on Tue and Wed; on week days etc) and no "ends on"/till feature -
+    all reminders besides those that execute "once", are repeated forever;
+-   no reminders editing (delete >> create new instead);
 */
 
 const mongoURL = "mongodb://127.0.0.1:27017/";

@@ -3,8 +3,10 @@ module.exports = (req, res) => {
  const hubMode = req.query['hub.mode'];
  const verifyTokenMatches = (req.query['hub.verify_token'] === 'remindmebot');
  if (hubMode && verifyTokenMatches) {
+   console.log('Verification Ok');
    res.status(200).send(hubChallenge);
   } else {
-  res.status(403).end();
+   console.log('Verification failed');
+   res.status(403).end();
   }
 };
