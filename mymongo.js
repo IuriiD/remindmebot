@@ -56,6 +56,7 @@ function createReminder(user, reminderDescription, reminderTime, ifRepeated=fals
 
         if (ifRepeated) {
             reminderDate = null;
+            reminderRecurrence = null;
         }
 
         const myReminder = {
@@ -269,11 +270,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             reminderDateMonth == todaysDateMonth &&
             reminderDateDay == todaysDateDate) {
             console.log('Date is today!');
-            if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                return true;
-            } else {
-                return false;
-            }
+            return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
         } else {
             return false;
         }
@@ -285,20 +282,12 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // Daily - check if reminder's time hasn't passed today
             case "Daily":
                 console.log('Daily reminder');
-                if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                    return true;
-                } else {
-                    return false;
-                }
+                return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
 
             // Weekly - check if the day reminder was set === today's day and then check the time
             case "Weekly":
                 if (reminderWasSetDay === dayOfWeek) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -306,11 +295,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // Monthly - check if the date reminder was set === today's day and then check the time
             case "Monthly":
                 if (reminderWasSetDate === todaysDateDate) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -318,11 +303,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // Weekends - check if today is a weekend and then check the time
             case "Weekends":
                 if (dayOfWeek === 6 || dayOfWeek === 0) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -330,11 +311,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // Weekdays - check if today is a week day and then check the time
             case "Weekdays":
                 if (dayOfWeek > 0 && dayOfWeek < 6) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -342,11 +319,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays"
             case "Mondays":
                 if (dayOfWeek === 1) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -354,11 +327,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Tuesdays"
             case "Tuesdays":
                 if (dayOfWeek === 2) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -366,11 +335,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Wednesdays"
             case "Wednesdays":
                 if (dayOfWeek === 3) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -378,11 +343,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Thursdays"
             case "Thursdays":
                 if (dayOfWeek === 4) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -390,11 +351,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Fridays"
             case "Fridays":
                 if (dayOfWeek === 5) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -402,11 +359,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Saturdays"
             case "Saturdays":
                 if (dayOfWeek === 6) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -414,11 +367,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Sundays"
             case "Sundays":
                 if (dayOfWeek === 0) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -426,11 +375,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Tuesdays"
             case "Mondays, Tuesdays":
                 if (dayOfWeek === 1 || dayOfWeek === 2) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -438,11 +383,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Wednesdays"
             case "Mondays, Wednesdays":
                 if (dayOfWeek === 1 || dayOfWeek === 3) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -450,11 +391,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Fridays"
             case "Mondays, Fridays":
                 if (dayOfWeek === 1 || dayOfWeek === 5) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -462,11 +399,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Tuesdays, Thursdays"
             case "Mondays, Thursdays":
                 if (dayOfWeek === 2 || dayOfWeek === 4) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -474,11 +407,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Wednesdays, Fridays"
             case "Wednesdays, Fridays":
                 if (dayOfWeek === 3 || dayOfWeek === 5) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -486,11 +415,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Tuesdays, Wednesdays"
             case "Mondays, Tuesdays, Wednesdays":
                 if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return(reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -498,11 +423,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Tuesdays, Wednesdays, Thursdays"
             case "Mondays, Tuesdays, Wednesdays, Thursdays":
                 if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -510,11 +431,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
             // "Mondays, Wednesdays, Fridays"
             case "Mondays, Wednesdays, Fridays":
                 if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
-                    if (reminderTimeMS>currentTime && reminderTimeMS<todayEnds) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
                 } else {
                     return false;
                 }
@@ -564,8 +481,6 @@ function showAllReminders4Today(user) {
 
                 console.log('reminderID ' + reminderID);
                 if (ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDate, reminderRecurrence, snoozedToTime)) {
-                    console.log('********');
-                    console.log('Today!');
                     todaysRemindersIDs.push(reminderID);
                 }
             }
@@ -576,25 +491,67 @@ function showAllReminders4Today(user) {
     });
 }
 
+/*
+    "Snoozes" (postpones) reminder with id reminderDocID for a given user for snoozeForMin minutes
+*/
+function snoozeReminder(user, reminderDocID, snoozeForMin) {
+    const MongoClient = require("mongodb").MongoClient;
+    const url = mongoURL;
+    const myQuery = {"_id": reminderDocID};
 
+    MongoClient.connect(url, function(err, db) {
+        if (err) throw err;
+        const dbo = db.db(dbName);
+        dbo.collection(user).findOne(myQuery, function(err, result) {
+                if (err) throw err;
+                if (result) {
+                    // Reminder might be already snoozed
+                    snoozedToTime = result["snoozedToTime"];
+                    if (!snoozedToTime) {
+                        reminderTime = result["reminderTime"];
+                    } else {
+                        reminderTime = snoozedToTime;
+                    }
+
+                    // Transform snoozeForMin into ms
+                    const snoozeForMS = snoozeForMin * 900000;
+
+                    // Transform reminderTime to ms
+                    const reminderTimeHours = reminderTime.split(":")[0];
+                    const reminderTimeMinutes = reminderTime.split(":")[1];
+                    const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
+
+                    // Next alert
+                    const snoozedTillMS = reminderTimeMS + snoozeForMS;
+
+                    // Back from ms to hh:mm
+                    const snoozedTillHelper = new Date(snoozedTillMS);
+                    const snoozedTillHours = snoozedTillHelper.getHours();
+                    const snoozedTillMinutes = snoozedTillHelper.getMinutes();
+                    const snoozedTill = `${snoozedTillHours}:${snoozedTillMinutes}`;
+
+                    // Update value in DB
+                    const newValues =  {$set: {snoozedToTime: snoozedTill}};
+                    dbo.collection(user).updateOne(myQuery, newValues, function(err, res) {
+                        if (err) throw err;
+                        console.log(`Document with id ${reminderDocID} was updated`);
+                        db.close();
+                    });
+                } else {
+                    // No document with reminderNumber found
+                    console.log("Reminder not found");
+                    db.close();
+                    return false;
+                }
+            });
+    });
+}
+
+snoozeReminder('FBID', "5b02a1684167f9383775965d", snoozeForMin);
 //deleteReminder('FB_ID2', 1);
 //clearAllReminders('FB_ID2');
 //showAllReminders4Today('FB_ID');
 
-//const today = new Date();
-//today.setHours(0, 0, 0, 0);
-//const numbers = today.getTime();
-//console.log(numbers);
+//createReminder('FBID', 'go on', '20:40', ifRepeated=false, reminderDate='2018-04-25', reminderRecurrence='Daily');
 
-//const remTime = new Date(2018, 4, 19, 10, 20).getTime();
-//const mytime = nextAlert(remTime, "Monthly");
-
-//showAllReminders4Today('FB_ID2');
-
-//createReminder('FBID', 'go on', '20:40', ifRepeated=true, reminderDate='2018-04-22', reminderRecurrence='Daily');
-//console.log(showAllReminders4Today('FBID'));
-//ifReminderIsToday('FBID', '5b02a0d70a5a9937cb27bb62'); // once today
-//ifReminderIsToday('FBID', '5b02a1684167f9383775965d'); // recurrent daily
-//ifReminderIsToday('FBID', '5b02a14082168e3830c2415d'); // once tomorrow
-
-showAllReminders4Today('FBID');
+//showAllReminders4Today('FBID');
