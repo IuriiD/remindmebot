@@ -29,6 +29,9 @@ module.exports = (event) => {
     const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot'});
 
     apiaiSession.on('response', (response) => {
+        console.log();
+        console.log('Response from DF:');
+        console.log(response);
         const result = response.result.fulfillment.speech;
         sendTextMessage(senderId, result);
     });
