@@ -514,7 +514,7 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
                     }
 
                     // Transform snoozeForMin into ms
-                    const snoozeForMS = snoozeForMin * 900000;
+                    const snoozeForMS = snoozeForMin + 900000;
 
                     // Transform reminderTime to ms
                     const reminderTimeHours = reminderTime.split(":")[0];
@@ -547,7 +547,16 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
     });
 }
 
-snoozeReminder('FBID', "5b02a1684167f9383775965d", snoozeForMin);
+
+/*
+    Generates ObjectID from a proper hex string
+*/
+function generateID(hexString) {
+    const ObjectID = require("mongodb").ObjectID;
+    return ObjectID;
+}
+
+//snoozeReminder('FBID', ourID, snoozeForMin);
 //deleteReminder('FB_ID2', 1);
 //clearAllReminders('FB_ID2');
 //showAllReminders4Today('FB_ID');

@@ -1,16 +1,25 @@
 'use strict';
 
+const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
+const apiAiClient = require('apiai')(API_AI_TOKEN);
+
+const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAO0hMjmlp9ASuciijPKDbX9Lrv5ZAECz5m8PUGdAx6DO9UX9xlFSNuEcML9ZBqXg56yET4sJZCNOIqHRIQczfAZAZCG0KEZAHlTwLcvnouCeTg6MSONzzNyM1MbSuLqHqjp4SMoXjfg4vK2EI3Uu5hdcJZCpyJX6tXyGdVt09PhXtWMp7CVqQgZD';
+const request = require('request');
+
 /*
     "Simplifications" in MVP:
     1) no "ends on"/till feature - all reminders besides those that execute "once", are repeated forever;
     2) no reminders editing (delete and create a new reminder instead if needed);
 */
 
-const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
-const apiAiClient = require('apiai')(API_AI_TOKEN);
+/*
+    Time of reminder (hh:mm) will be saved, flag defining if to repeat the reminder and reminder's recurrence
+    if it should be repeated or specific date when it should be triggered).
 
-const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAO0hMjmlp9ASuciijPKDbX9Lrv5ZAECz5m8PUGdAx6DO9UX9xlFSNuEcML9ZBqXg56yET4sJZCNOIqHRIQczfAZAZCG0KEZAHlTwLcvnouCeTg6MSONzzNyM1MbSuLqHqjp4SMoXjfg4vK2EI3Uu5hdcJZCpyJX6tXyGdVt09PhXtWMp7CVqQgZD';
-const request = require('request');
+    All reminders will be checked every minute and current time will be analysed (>> date; day of the week/month; if
+    weekday or day off) and if reminder's recurrence corresponds to today's characteristics then it's a today's reminder
+    and will be alerted at corresponding time
+*/
 
 const mongoURL = "mongodb://127.0.0.1:27017/";
 const dbName = 'remindmebot';
@@ -20,14 +29,16 @@ const snoozeForMin = 5;
     Inserts a document to collection 'user' in DB 'remindmebot'
     reminderDescription - what to remind about (any text); required
     reminderTime - date-time of reminder (00:00-23:59); required
-    reminderDate - is considered if (reminderRecurrence===false), arbitrary date (yyyy-mm-dd, mm 1-12); optional,
-        if (!reminderRecurrence && reminderDate=="") {reminderDate = today}
-    reminderRecurrence - optional
 
-    Possible variants of reminderRecurrence and reminderDate:
-    0) if (reminderRecurrence === false && reminderDate === null) = today (reminder time must be in future);
-    1) if (reminderRecurrence === false && reminderDate !== null) = at specific date for eg. 2018-10-05;
-    2) if (reminderRecurrence === true) - reminderDate doesn't matter, possible variants of reminderRecurrence:
+    ifRepeated - flag showing if it's a one-time or a recurrent reminder; optional
+    reminderDate - is considered in case if (ifRepeated===false), arbitrary date (yyyy-mm-dd); optional, if (!ifRepeated && reminderDate=="") {reminderDate = today}
+    reminderRecurrence - is considered in case if (ifRepeated===true); required if (ifRepeated)
+    snoozedToTime - filed reserved for saving time (00:00-23:59) to which reminder was postponed, reminderTime + snoozeForMin
+
+    Possible variants for reminderDate and reminderRecurrence:
+    0) if (ifRepeated === false && reminderDate === null) = today (reminder time must be in future);
+    1) if (ifRepeated === false && reminderDate !== null) = at specific date for eg. 2018-10-05;
+    2) if (ifRepeated === true) - reminderDate doesn't matter, possible variants of reminderRecurrence:
     2a) "Daily";
     2b) "Weekly" = on the same day of the week as reminder was set;
     2c) arbitrary variants ("Mondays"/"Tuesdays"/"Wednesdays"/"Thursdays"/"Fridays"/"Saturdays"/"Sundays" and their combinations (not all)
@@ -36,7 +47,7 @@ const snoozeForMin = 5;
     2e) "Weekends" (=Sat-Sun);
     2f) "Monthly" on the same day of the month (for eg., 25 or 01)
 */
-function createReminder(user, reminderDescription, reminderTime, reminderDate=null, reminderRecurrence=null) {
+function createReminder(user, reminderDescription, reminderTime, ifRepeated=false, reminderDate=null, reminderRecurrence=null) {
     return new Promise((resolve, reject) => {
 
         const MongoClient = require("mongodb").MongoClient;
@@ -47,20 +58,23 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
 
             const dbo = db.db(dbName);
 
-            if (!reminderRecurrence && !reminderDate) {
+            if (!ifRepeated && !reminderDate) {
                 let today = new Date();
                 reminderDate = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
             }
 
-            if (reminderRecurrence) { reminderDate = null; }
+            if (ifRepeated) {
+                reminderDate = null;
+                reminderRecurrence = null; //?
+            }
 
             const myReminder = {
                 reminderDescription: reminderDescription,
                 reminderTime: reminderTime,
+                ifRepeated: ifRepeated,
                 reminderDate: reminderDate,
                 reminderRecurrence: reminderRecurrence,
-                snoozedToTime: null     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
-                                        // reminderTime + snoozeForMin
+                snoozedToTime: null
             };
 
             console.log('myReminder: ' + myReminder);
@@ -70,7 +84,7 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
                 if (res) {
                     // Logging
                     let recurrenceWording = "";
-                    if (!reminderRecurrence) {
+                    if (!ifRepeated) {
                         recurrenceWording = "once";
                         if (reminderTime) {
                             recurrenceWording += ` on ${reminderDate}`;
@@ -221,7 +235,7 @@ function clearAllReminders(user) {
 /*
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
-function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
+function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDate, reminderRecurrence, snoozedToTime) {
     // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
     const today = new Date();
     const todaysDateYear = today.getFullYear();
@@ -260,7 +274,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderR
 
 // Main check-tree
     // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
-    if (!reminderRecurrence) {
+    if (!ifRepeated) {
         if (reminderDateYear == todaysDateYear &&
             reminderDateMonth == todaysDateMonth &&
             reminderDateDay == todaysDateDate) {
@@ -456,6 +470,7 @@ function showAllReminders4Today(user) {
 
                 let reminderID = "";
                 let reminderTime = "";
+                let ifRepeated = null;
                 let reminderDate = "";
                 let reminderRecurrence = "";
                 let snoozedToTime = "";
@@ -464,12 +479,13 @@ function showAllReminders4Today(user) {
                     reminderID = result[i]["_id"];
                     reminderWasSet = result[i]["_id"].getTimestamp();
                     reminderTime = result[i]["reminderTime"];
+                    ifRepeated = result[i]["ifRepeated"];
                     reminderDate = result[i]["reminderDate"];
                     reminderRecurrence = result[i]["reminderRecurrence"];
                     snoozedToTime = result[i]["snoozedToTime"];
 
                     console.log('reminderID ' + reminderID);
-                    if (ifReminderIsToday(reminderWasSet, reminderTime,
+                    if (ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated,
                         reminderDate, reminderRecurrence, snoozedToTime)) {
                         todaysRemindersIDs.push({
                             reminderID: reminderID,
@@ -608,42 +624,24 @@ module.exports = (event) => {
             case "reminders.add":
                 speech = "";
                 let reminderDescription = "";
+                let reminderRecurrence = "";
+                let ifRepeated = false;
                 let reminderTime = "";
-                let reminderRecurrence = null;
-                let reminderDate = null;
+                let reminderDate = "";
 
                 actionIncomplete = dfResponse.result.actionIncomplete;
 
                 if (!actionIncomplete) {
-                    // All required info entered (reminderDescription and reminderTime)
+                    reminderTime = dfResponse.result.parameters.time.slice(0, 5); // 10:00:00
+                    reminderDate = dfResponse.result.parameters.date; // 2018-05-22, month 1-12 not 0-11
                     reminderDescription = dfResponse.result.parameters.name;
-                    reminderTime = dfResponse.result.parameters.time.slice(0, 5); // 10:00:00 >> 10:00
                     reminderRecurrence = dfResponse.result.parameters.recurrence;
-                    if (!reminderRecurrence) {
-                        reminderDate = dfResponse.result.parameters.date; // 2018-05-22, month 1-12
-                    }
+                    if (reminderRecurrence === "") { ifRepeated = true; } else { ifRepeated = false; }
 
-                    // Save reminder to db
-                    let newReminder = createReminder(senderId, reminderDescription, reminderTime, reminderDate, reminderRecurrence);
-                    newReminder.then(function(data) {
-                        if (data) {
-                            let reminderRecurrenceWording = "";
-                            let reminderDateWording = "";
-                            if (reminderRecurrence) {
-                                reminderRecurrenceWording = ` (${reminderRecurrence})`;
-                            }
-                            if (reminderDate) {
-                                reminderDateWording = `${reminderDate}`;
-                            }
-                            speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
-                        } else {
-                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
-                        }
-                        sendTextMessage(senderId, speech);
-                    });
 
+                    speech = `${reminderDate} - ${reminderTime} - ${reminderDescription } - ${reminderRecurrence}`;
+                    sendTextMessage(senderId, speech);
                 } else {
-                    // Continue slot-filling
                     speech = dfResponse.result.fulfillment.speech;
                     sendTextMessage(senderId, speech);
                 }
