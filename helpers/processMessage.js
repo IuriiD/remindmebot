@@ -187,32 +187,34 @@ function deleteReminder(user, reminderDocID) {
     Deletes all documents in collection for a given user
 */
 function clearAllReminders(user) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
+    return new Promise((resolve, reject) => {
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
 
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
+        MongoClient.connect(url, function (err, db) {
+            if (err) resolve(false);
+            const dbo = db.db(dbName);
 
-        dbo.listCollections({name: user}).next(function(err, collinfo) {
-            if (collinfo) {
-                dbo.collection(user).drop(function(err, delOK) {
-                    if (err) throw err;
-                    if (delOK) {
-                        console.log("Collection for user " + user + " was deleted");
-                        db.close();
-                        return true;
-                    } else {
-                        console.log("Failed to delete collection for user " + user);
-                        db.close();
-                        return false;
-                    }
-                });
-            } else {
-                console.log("Collection " + user + " not found");
-                db.close();
-                return false;
-            }
+            dbo.listCollections({name: user}).next(function (err, collinfo) {
+                if (collinfo) {
+                    dbo.collection(user).drop(function (err, delOK) {
+                        if (err) resolve(false);
+                        if (delOK) {
+                            console.log("Collection for user " + user + " was deleted");
+                            db.close();
+                            resolve(true);
+                        } else {
+                            console.log("Failed to delete collection for user " + user);
+                            db.close();
+                            resolve(false);
+                        }
+                    });
+                } else {
+                    console.log("Collection " + user + " not found");
+                    db.close();
+                    resolve(false);
+                }
+            });
         });
     });
 }
@@ -624,7 +626,7 @@ module.exports = (event) => {
                     }
 
                     // Save reminder to db
-                    let newReminder = createReminder(senderId, reminderDescription, reminderTime, reminderDate, reminderRecurrence);
+                    const newReminder = createReminder(senderId, reminderDescription, reminderTime, reminderDate, reminderRecurrence);
                     newReminder.then(function(data) {
                         if (data) {
                             let reminderRecurrenceWording = "";
@@ -649,6 +651,24 @@ module.exports = (event) => {
                 }
                 break;
 
+            // Deleting all reminders
+            case "reminders.remove - context:confirm - comment:confirmation":
+                const userEntered = dfResponse.result.parameters.deletion_confirmation;
+                if (userEntered !== "CLEAR ALL") {
+                    speech = "Sorry, but you didn't provide correct confirmation. Reminders were not deleted";
+                } else {
+                    const remindersDeletionFlag = clearAllReminders(senderId);
+                    remindersDeletionFlag.then(function(data) {
+                        if (data) {
+                            speech = "All reminders have been successfully erased!";
+                        } else {
+                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                        }
+                        sendTextMessage(senderId, speech);
+                    });
+
+                }
+                break;
 
             // Default response (no key intents triggered) - pass DF's response
             default:
