@@ -9,14 +9,100 @@
 const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
 const apiAiClient = require('apiai')(API_AI_TOKEN);
 
-const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAO0hMjmlp9ASuciijPKDbX9Lrv5ZAECz5m8PUGdAx6DO9UX9xlFSNuEcML9ZBqXg56yET4sJZCNOIqHRIQczfAZAZCG0KEZAHlTwLcvnouCeTg6MSONzzNyM1MbSuLqHqjp4SMoXjfg4vK2EI3Uu5hdcJZCpyJX6tXyGdVt09PhXtWMp7CVqQgZD';
+const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD';
 const request = require('request');
 
 const mongoURL = "mongodb://127.0.0.1:27017/";
 const dbName = 'remindmebot';
 const snoozeForMin = 5;
 
+
+
+
 /*
+let hi = [
+  {
+    "locale":"default",
+    "composer_input_disabled":false,
+    "call_to_actions":
+    [
+        {
+            "title":"Add a reminder",
+            "type":"postback",
+            "payload":"remind me"
+        },
+        {
+            "title":"Today's reminders",
+            "type":"postback",
+            "payload":"show reminders"
+        },
+        {
+            "title":"Clear reminders",
+            "type":"postback",
+            "payload":"delete reminders"
+        }
+        ]
+      }
+    ];
+
+
+// Call to set up Persistent menu
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"existing_thread",
+  "call_to_actions":[
+       {
+        "title":"Add a reminder",
+        "type":"postback",
+        "payload":"remind me"
+    },
+    {
+        "title":"Today's reminders",
+        "type":"postback",
+        "payload":"show reminders"
+    },
+    {
+        "title":"Clear reminders",
+        "type":"postback",
+        "payload":"delete reminders"
+    }
+]
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to delete persistent menu
+curl -X DELETE -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"existing_thread"
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to set up "Get started" button
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"new_thread",
+  "call_to_actions":[
+    {
+      "payload":"Greeting"
+    }
+  ]
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to add greeting text
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"greeting",
+  "greeting":{
+    "text":"Hi {{user_first_name}}! Need help to manage your reminders? I can do that ;)"
+  }
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+// Call to delete greeting text
+curl -X DELETE -H "Content-Type: application/json" -d '{
+  "setting_type":"greeting"
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
     Inserts a document to collection 'user' in DB 'remindmebot'
     reminderDescription - what to remind about (any text); required
     reminderTime - date-time of reminder (00:00-23:59); required
@@ -43,7 +129,7 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
         const url = mongoURL;
 
         MongoClient.connect(url, function(err, db) {
-            if (err) resolve(false);
+            if (err) reject(false);
 
             const dbo = db.db(dbName);
 
@@ -66,7 +152,7 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
             console.log('myReminder: ' + myReminder);
 
             dbo.collection(user).insertOne(myReminder, function(err, res) {
-                if (err) resolve(false);
+                if (err) reject(false);
                 if (res) {
                     // Logging
                     let recurrenceWording = "";
@@ -85,9 +171,57 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
                 } else {
                     console.log("Failed to set a reminder");
                     db.close();
-                    resolve(false);
+                    reject(false);
                 }
             });
+        });
+    });
+}
+
+
+/*
+    For a given user removes reminder with _id which corresponds to (reminderN-1) in the list reminders left for today
+*/
+function deleteReminder(user, reminderDocID) {
+    return new Promise((resolve, reject) => {
+
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+
+        MongoClient.connect(url, function(err, db) {
+            if (err) reject(false);
+
+            const dbo = db.db(dbName);
+
+            dbo.collection(user).findOne(
+                {
+                    _id: reminderDocID
+                },
+                function(err, result) {
+                    if (err) reject(false);
+                    if (result) {
+                        // Reminder with reminderNumber found - remove this document
+                        const documentToDeleteID = {_id: reminderDocID};
+                        dbo.collection(user).deleteOne(documentToDeleteID, function(err, obj) {
+                            if (err) {
+                                console.log("Failed to delete this reminder");
+                                db.close();
+                                resolve(false);
+                            }
+                            if (obj) {
+                                console.log("Reminder successfully deleted!");
+                                db.close();
+                                resolve(true);
+                            }
+                        });
+
+                    } else {
+                        // No document with reminderNumber found
+                        console.log("Reminder not found");
+                        db.close();
+                        resolve(false);
+                    }
+                });
         });
     });
 }
@@ -144,61 +278,22 @@ function checkForDuplicates(user, reminderContent, reminderTime) {
 
 
 /*
-    Removes a document with reminderDocID (_id) for a given user
-*/
-function deleteReminder(user, reminderDocID) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
-        dbo.collection(user).findOne(
-            {
-                _id: reminderDocID
-            },
-            function(err, result) {
-                if (err) throw err;
-                if (result) {
-                    // Reminder with reminderNumber found - remove this document
-                    const documentToDeleteID = {_id: reminderDocID};
-                    dbo.collection(user).deleteOne(documentToDeleteID, function(err, obj) {
-                        if (err) {
-                            console.log("Failed to delete this reminder");
-                            throw err;
-                            db.close();
-                        } else {
-                            console.log("Reminder successfully deleted!");
-                        }
-                        db.close();
-                    });
-                    return true;
-                } else {
-                    // No document with reminderNumber found
-                    console.log("Reminder not found");
-                    db.close();
-                    return false;
-                }
-            });
-    });
-}
-
-/*
     Deletes all documents in collection for a given user
 */
 function clearAllReminders(user) {
     return new Promise((resolve, reject) => {
+        console.log("Deleting all reminders for user " + user);
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
         MongoClient.connect(url, function (err, db) {
-            if (err) resolve(false);
+            if (err) reject(false);
             const dbo = db.db(dbName);
 
             dbo.listCollections({name: user}).next(function (err, collinfo) {
                 if (collinfo) {
                     dbo.collection(user).drop(function (err, delOK) {
-                        if (err) resolve(false);
+                        if (err) reject(false);
                         if (delOK) {
                             console.log("Collection for user " + user + " was deleted");
                             db.close();
@@ -206,13 +301,13 @@ function clearAllReminders(user) {
                         } else {
                             console.log("Failed to delete collection for user " + user);
                             db.close();
-                            resolve(false);
+                            reject(false);
                         }
                     });
                 } else {
                     console.log("Collection " + user + " not found");
                     db.close();
-                    resolve(false);
+                    reject(false);
                 }
             });
         });
@@ -450,11 +545,11 @@ function showAllReminders4Today(user) {
         let todaysRemindersIDs = [];
 
         MongoClient.connect(url, function(err, db) {
-            if (err) resolve(false);
+            if (err) reject(false);
             const dbo = db.db(dbName);
 
             dbo.collection(user).find({}).toArray(function(err, result) {
-                if (err) resolve(false);
+                if (err) reject(false);
 
                 let reminderID = "";
                 let reminderTime = "";
@@ -481,10 +576,49 @@ function showAllReminders4Today(user) {
                     }
                 }
                 db.close();
-                resolve(todaysRemindersIDs);
+                resolve(sortRemindersByTime(todaysRemindersIDs));
             });
         });
     });
+}
+
+
+/*
+    Sorts a list of reminders by reminderTime; supportive function
+*/
+function sortRemindersByTime(remindersArray) {
+    // reminderTime is saved as a string "hh:mm"; let's add an int value (hh * 60 + mm) to each reminder object
+    let newRemindersArray = remindersArray;
+    console.log("newRemindersArray: " + newRemindersArray);
+    let reminderTime = "";
+    let reminderTimeMin = "";
+    let reminderTimeHoursInt = "";
+    let reminderTimeMinutesInt = "";
+    for (let i=0; i<remindersArray.length; i++) {
+        reminderTime = remindersArray[i]["reminderTime"];
+        reminderTimeHoursInt = Number(reminderTime.split(":")[0]);
+        reminderTimeMinutesInt = Number(reminderTime.split(":")[1]);
+        reminderTimeMin = reminderTimeHoursInt * 60 + reminderTimeMinutesInt;
+        newRemindersArray[i]["reminderTimeMin"] = reminderTimeMin;
+    }
+    return newRemindersArray.sort(compareReminders);
+}
+
+
+/*
+    Prepares sorting instructions for sortRemindersByTime()
+*/
+function compareReminders(a, b) {
+    const reminderA = a.reminderTimeMin;
+    const reminderB = b.reminderTimeMin;
+
+    let comparison = 0;
+    if (reminderA > reminderB) {
+        comparison = 1;
+    } else if (reminderA < reminderB) {
+        comparison = -1;
+    }
+    return comparison;
 }
 
 
@@ -555,7 +689,9 @@ function generateID(hexString) {
     return ObjectID;
 }
 
-
+/*
+    Sends a text message to FB Messenger
+*/
 function sendTextMessage(senderId, text) {
     request({
         url: 'https://graph.facebook.com/v2.6/me/messages',
@@ -568,6 +704,7 @@ function sendTextMessage(senderId, text) {
     });
 };
 
+
 module.exports = (event) => {
     const senderId = event.sender.id;
     const message = event.message.text;
@@ -579,7 +716,7 @@ module.exports = (event) => {
     //console.log('event object from FB: ');
     //console.log(event);
 
-    const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot'});
+    const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot3'});
 
     apiaiSession.on('response', (dfResponse) => {
         console.log();
@@ -587,6 +724,14 @@ module.exports = (event) => {
         console.log(dfResponse);
 
         const actionTriggered = dfResponse.result.action;
+        const contexts = dfResponse.result.contexts;
+        let contextsList = [];
+        for (let i=0; i<contexts.length; i++) {
+            contextsList.push(contexts[i]["name"]);
+        }
+
+        console.log('actionTriggered: ' + actionTriggered);
+        console.log('contextsList: ' + contextsList);
 
 
         let AllReminders4Today = [];
@@ -598,9 +743,16 @@ module.exports = (event) => {
                 speech = "";
                 AllReminders4Today = showAllReminders4Today(senderId);
                 AllReminders4Today.then(function(data) {
-                    for (let i=0; i<data.length; i++) {
-                        if (i>0) { speech += "\n\n"; }
-                        speech += `${data[i]["reminderTime"]}\n${data[i]["reminderDescription"]}`;
+                    if (data.length>0) {
+                        speech += `Here are our reminders left till the end of the day:\n`;
+                        for (let i=0; i<data.length; i++) {
+                            if (i>0) { speech += "\n\n"; }
+                            speech += `\nReminder # ${i+1}`;
+                            speech += `\nTime: ${data[i]["reminderTime"]}`;
+                            speech += `\nDescription: ${data[i]["reminderDescription"]}`;
+                        }
+                    } else {
+                        speech = "Sorry but you have no reminders for today"
                     }
                     sendTextMessage(senderId, speech);
                 });
@@ -642,7 +794,11 @@ module.exports = (event) => {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
                         }
                         sendTextMessage(senderId, speech);
-                    });
+                    })
+                        .catch(err => {
+                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
+                            sendTextMessage(senderId, speech);
+                        })
 
                 } else {
                     // Continue slot-filling
@@ -652,11 +808,11 @@ module.exports = (event) => {
                 break;
 
             // Deleting all reminders
-            case "reminders.remove - context:confirm - comment:confirmation":
+            case "reminders.remove-confirmed":
                 const userEntered = dfResponse.result.parameters.deletion_confirmation;
-                if (userEntered !== "CLEAR ALL") {
-                    speech = "Sorry, but you didn't provide correct confirmation. Reminders were not deleted";
-                } else {
+                console.log("userEntered: " + userEntered);
+                if (userEntered == "CLEAR ALL") {
+                    console.log('Deleting reminders...');
                     const remindersDeletionFlag = clearAllReminders(senderId);
                     remindersDeletionFlag.then(function(data) {
                         if (data) {
@@ -665,14 +821,77 @@ module.exports = (event) => {
                             speech = "Unfortunately I failed to delete your reminders.. :(";
                         }
                         sendTextMessage(senderId, speech);
-                    });
-
+                    })
+                        .catch(err => {
+                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                            sendTextMessage(senderId, speech);
+                        })
                 }
+                break;
+
+            // Incorrect reminders confirmation is cached by Default Fallback intent
+            case "input.unknown":
+                if (contextsList.includes("remove-confirm")) {
+                    speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
+                    sendTextMessage(senderId, speech);
+                } else {
+                    speech = dfResponse.result.fulfillment.speech;
+                    sendTextMessage(senderId, speech);
+                }
+                break;
+
+            // Deleting at specific reminder
+            case "remindersget.deletethisreminder":
+                const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
+                console.log("Reminder to delete: " + reminderNumber);
+
+                showAllReminders4Today(senderId)
+                    .then(remindersArray => {
+                        console.log("Got a list of todays reminders, N=" + remindersArray.length);
+                        let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
+                        console.log("Reminder to delete has ID " + reminderDocID);
+                        return reminderDocID;
+                        ;
+                    })
+                    .then(reminderDocID => {
+                        let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
+                        console.log("Result of reminder deletion: " + deleteReminderFlag);
+                        return deleteReminderFlag;
+                    })
+                    .then(deleteReminderFlag => {
+                        if (deleteReminderFlag) {
+                            let remindersArrayUpdated = showAllReminders4Today(senderId);
+                            return remindersArrayUpdated;
+                        } else {
+                            return false;
+                        }
+                    })
+                    .then(result => {
+                        if (result) {
+                            if (result.length>0) {
+                                speech += `\n\nHere's what's left:\n`;
+                                for (let i=0; i<result.length; i++) {
+                                    if (i>0) { speech += "\n\n"; }
+                                    speech += `\nReminder # ${i+1}`;
+                                    speech += `\nTime: ${result[i]["reminderTime"]}`;
+                                    speech += `\nDescription: ${result[i]["reminderDescription"]}`;
+                                }
+                            } else {
+                                speech = "And at the moment we don't have any reminders left for today";
+                            }
+                        } else {
+                            speech = "Sorry but I failed to remove this reminder";
+                        }
+                        sendTextMessage(senderId, speech);
+                    })
+                    .catch( error => {
+                            console.log("Some error in promise chain: " + error);
+                    }
+                    );
                 break;
 
             // Default response (no key intents triggered) - pass DF's response
             default:
-                speech = "";
                 speech = dfResponse.result.fulfillment.speech;
                 sendTextMessage(senderId, speech);
         }
