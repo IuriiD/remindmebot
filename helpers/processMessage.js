@@ -145,8 +145,9 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
                 reminderTime: reminderTime,
                 reminderDate: reminderDate,
                 reminderRecurrence: reminderRecurrence,
-                snoozedToTime: null     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
-                                        // reminderTime + snoozeForMin
+                snoozedToTime: null,     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
+                                         // reminderTime + snoozeForMin
+                reminderConfirmed: null  // all reminders today with reminderTime/snoozedToTime in past have to be confirmed
             };
 
             console.log('myReminder: ' + myReminder);
@@ -316,19 +317,105 @@ function clearAllReminders(user) {
 
 
 /*
+    Returns an array of reminder that should be executed at this minute
+*/
+function remindersToAler() {
+    return new Promise((resolve, reject) => {
+        let userID = "";
+        let allReminderToAlert = [];
+
+        const currTime = new Date();
+        currTime.setHours(currTime.getHours()+3); // to change from UTC/GMT to GMT+3
+        const currTimeMS = currTime.getTime();
+
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+
+        MongoClient.connect(url, function (err, db) {
+            if (err) reject(false);
+            const dbo = db.db(dbName);
+
+            // For every collection in DB
+            dbo.listCollections().toArray(function(err, collArray) {
+                if (err) reject(false);
+
+                if (collArray && collArray.length>0) {
+                    // Get a list of reminders and a collection name (=sender ID)
+                    for (let i=0; i<collArray.length; i++) {
+                        userID = collArray[i]["name"];
+
+                        dbo.collection(userID).find({}).toArray(function(err, remindersArr) {
+                            if (err) reject(false);
+
+                            // For every reminder in array check
+                            for (let x=0; x<remindersArr.length; x++) {
+                                let reminderConfirmed = remindersArr[x]["reminderConfirmed"];
+                                let reminderID = remindersArr[x]["_id"];
+                                let reminderTime = remindersArr[x]["reminderTime"];
+                                let reminderWasSet = reminderID.getTimestamp();
+                                let reminderDate = remindersArr[x]["reminderDate"];
+                                let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
+                                let snoozedToTime = remindersArr[x]["snoozeToTime"];
+
+                                // .. if this reminder is for today and if yes, ...
+                                if (ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime)) {
+                                    // .. if it's in past and ...
+                                    if (snoozedToTime) {
+                                        reminderTime = snoozedToTime;
+
+                                    let reminderHours = Number(reminderTime.split(":")[0]);
+                                    let reminderMinutes = Number(reminderTime.split(":")[1]);
+                                    let remTime = new Date();
+                                    remTime.setHours(reminderHours, reminderMinutes, 0, 0);
+                                    const reminderTimeMS = remTime.getTime();
+
+                                    if (reminderTimeMS<currTimeMS) {
+                                        // if this reminder was not confirmed today yet (reminderConfirmed != today's date)
+                                        const todaysDateY = currTime.getFullYear();
+                                        const todaysDateM = currTime.getMonth()+1;
+                                        const todaysDateD = currTime.getDate();
+                                        const todaysDateStr = `${todaysDateY}-${todaysDateM}-${todaysDateD}`;
+                                        if (reminderConfirmed !== todaysDateStr) {
+                                            allReminderToAlert.push(
+                                                {
+                                                    "userID": userID,
+                                                    "_id": reminderID
+                                                }
+                                            )
+                                        }
+                                    }
+                                    }
+                                }
+                            }
+
+                        });
+                    }
+
+                    resolve(allReminderToAlert);
+                } else {
+                    resolve(false);
+                }
+            });
+
+        });
+    });
+}
+
+
+/*
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
 function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
     // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
     const today = new Date();
+    today.setUTCHours(today.getHours()+3);
     const todaysDateYear = today.getFullYear();
     const todaysDateMonth = today.getMonth()+1; // 0-11 >> 1-12
     const todaysDateDate = today.getDate();
     const dayOfWeek = today.getDay(); // 0-6, Sun=0
     const currentTime = today.getTime(); // ms
 
-    const todayBegan = new Date();
-    const todayBeganMS = todayBegan.setHours(0, 0, 0, 0);
+    const todayBeganMS = today.setHours(0, 0, 0, 0);
     const todayEnds = todayBeganMS + 86400000-1; // ms in 1 day
 
     // Working with reminder's time data
@@ -690,7 +777,7 @@ function generateID(hexString) {
 }
 
 /*
-    Sends a text message to FB Messenger
+    Sends a message to FB Messenger
 */
 function sendMessage(senderId, ourMessage) {
     request({
