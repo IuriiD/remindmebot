@@ -1,44 +1,119 @@
 'use strict';
 
-const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
-const apiAiClient = require('apiai')(API_AI_TOKEN);
-
-const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAO0hMjmlp9ASuciijPKDbX9Lrv5ZAECz5m8PUGdAx6DO9UX9xlFSNuEcML9ZBqXg56yET4sJZCNOIqHRIQczfAZAZCG0KEZAHlTwLcvnouCeTg6MSONzzNyM1MbSuLqHqjp4SMoXjfg4vK2EI3Uu5hdcJZCpyJX6tXyGdVt09PhXtWMp7CVqQgZD';
-const request = require('request');
-
 /*
     "Simplifications" in MVP:
     1) no "ends on"/till feature - all reminders besides those that execute "once", are repeated forever;
     2) no reminders editing (delete and create a new reminder instead if needed);
 */
 
-/*
-    Time of reminder (hh:mm) will be saved, flag defining if to repeat the reminder and reminder's recurrence
-    if it should be repeated or specific date when it should be triggered).
+const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
+const apiAiClient = require('apiai')(API_AI_TOKEN);
 
-    All reminders will be checked every minute and current time will be analysed (>> date; day of the week/month; if
-    weekday or day off) and if reminder's recurrence corresponds to today's characteristics then it's a today's reminder
-    and will be alerted at corresponding time
-*/
+const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD';
+const request = require('request');
 
 const mongoURL = "mongodb://127.0.0.1:27017/";
 const dbName = 'remindmebot';
 const snoozeForMin = 5;
 
+
+
+
 /*
+let hi = [
+  {
+    "locale":"default",
+    "composer_input_disabled":false,
+    "call_to_actions":
+    [
+        {
+            "title":"Add a reminder",
+            "type":"postback",
+            "payload":"remind me"
+        },
+        {
+            "title":"Today's reminders",
+            "type":"postback",
+            "payload":"show reminders"
+        },
+        {
+            "title":"Clear reminders",
+            "type":"postback",
+            "payload":"delete all reminders"
+        }
+        ]
+      }
+    ];
+
+
+// Call to set up Persistent menu
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"existing_thread",
+  "call_to_actions":[
+       {
+        "title":"Add a reminder",
+        "type":"postback",
+        "payload":"remind me"
+    },
+    {
+        "title":"Today's reminders",
+        "type":"postback",
+        "payload":"show reminders"
+    },
+    {
+        "title":"Clear reminders",
+        "type":"postback",
+        "payload":"delete all reminders"
+    }
+]
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to delete persistent menu
+curl -X DELETE -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"existing_thread"
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to set up "Get started" button
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"call_to_actions",
+  "thread_state":"new_thread",
+  "call_to_actions":[
+    {
+      "payload":"Getting_started_command"
+    }
+  ]
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
+// Call to add greeting text
+curl -X POST -H "Content-Type: application/json" -d '{
+  "setting_type":"greeting",
+  "greeting":{
+    "text":"Hi {{user_first_name}}! Need to manage your reminders? I can help with that ;)"
+  }
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+// Call to delete greeting text
+curl -X DELETE -H "Content-Type: application/json" -d '{
+  "setting_type":"greeting"
+}' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
+
+
     Inserts a document to collection 'user' in DB 'remindmebot'
     reminderDescription - what to remind about (any text); required
     reminderTime - date-time of reminder (00:00-23:59); required
+    reminderDate - is considered if (reminderRecurrence===false), arbitrary date (yyyy-mm-dd, mm 1-12); optional,
+        if (!reminderRecurrence && reminderDate=="") {reminderDate = today}
+    reminderRecurrence - optional
 
-    ifRepeated - flag showing if it's a one-time or a recurrent reminder; optional
-    reminderDate - is considered in case if (ifRepeated===false), arbitrary date (yyyy-mm-dd); optional, if (!ifRepeated && reminderDate=="") {reminderDate = today}
-    reminderRecurrence - is considered in case if (ifRepeated===true); required if (ifRepeated)
-    snoozedToTime - filed reserved for saving time (00:00-23:59) to which reminder was postponed, reminderTime + snoozeForMin
-
-    Possible variants for reminderDate and reminderRecurrence:
-    0) if (ifRepeated === false && reminderDate === null) = today (reminder time must be in future);
-    1) if (ifRepeated === false && reminderDate !== null) = at specific date for eg. 2018-10-05;
-    2) if (ifRepeated === true) - reminderDate doesn't matter, possible variants of reminderRecurrence:
+    Possible variants of reminderRecurrence and reminderDate:
+    0) if (reminderRecurrence === false && reminderDate === null) = today (reminder time must be in future);
+    1) if (reminderRecurrence === false && reminderDate !== null) = at specific date for eg. 2018-10-05;
+    2) if (reminderRecurrence === true) - reminderDate doesn't matter, possible variants of reminderRecurrence:
     2a) "Daily";
     2b) "Weekly" = on the same day of the week as reminder was set;
     2c) arbitrary variants ("Mondays"/"Tuesdays"/"Wednesdays"/"Thursdays"/"Fridays"/"Saturdays"/"Sundays" and their combinations (not all)
@@ -47,44 +122,41 @@ const snoozeForMin = 5;
     2e) "Weekends" (=Sat-Sun);
     2f) "Monthly" on the same day of the month (for eg., 25 or 01)
 */
-function createReminder(user, reminderDescription, reminderTime, ifRepeated=false, reminderDate=null, reminderRecurrence=null) {
+function createReminder(user, reminderDescription, reminderTime, reminderDate=null, reminderRecurrence=null) {
     return new Promise((resolve, reject) => {
 
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
         MongoClient.connect(url, function(err, db) {
-            if (err) resolve(false);
+            if (err) reject(false);
 
             const dbo = db.db(dbName);
 
-            if (!ifRepeated && !reminderDate) {
+            if (!reminderRecurrence && !reminderDate) {
                 let today = new Date();
                 reminderDate = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
             }
 
-            if (ifRepeated) {
-                reminderDate = null;
-                reminderRecurrence = null; //?
-            }
+            if (reminderRecurrence) { reminderDate = null; }
 
             const myReminder = {
                 reminderDescription: reminderDescription,
                 reminderTime: reminderTime,
-                ifRepeated: ifRepeated,
                 reminderDate: reminderDate,
                 reminderRecurrence: reminderRecurrence,
-                snoozedToTime: null
+                snoozedToTime: null     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
+                                        // reminderTime + snoozeForMin
             };
 
             console.log('myReminder: ' + myReminder);
 
             dbo.collection(user).insertOne(myReminder, function(err, res) {
-                if (err) resolve(false);
+                if (err) reject(false);
                 if (res) {
                     // Logging
                     let recurrenceWording = "";
-                    if (!ifRepeated) {
+                    if (!reminderRecurrence) {
                         recurrenceWording = "once";
                         if (reminderTime) {
                             recurrenceWording += ` on ${reminderDate}`;
@@ -99,9 +171,57 @@ function createReminder(user, reminderDescription, reminderTime, ifRepeated=fals
                 } else {
                     console.log("Failed to set a reminder");
                     db.close();
-                    resolve(false);
+                    reject(false);
                 }
             });
+        });
+    });
+}
+
+
+/*
+    For a given user removes reminder with _id which corresponds to (reminderN-1) in the list reminders left for today
+*/
+function deleteReminder(user, reminderDocID) {
+    return new Promise((resolve, reject) => {
+
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+
+        MongoClient.connect(url, function(err, db) {
+            if (err) reject(false);
+
+            const dbo = db.db(dbName);
+
+            dbo.collection(user).findOne(
+                {
+                    _id: reminderDocID
+                },
+                function(err, result) {
+                    if (err) reject(false);
+                    if (result) {
+                        // Reminder with reminderNumber found - remove this document
+                        const documentToDeleteID = {_id: reminderDocID};
+                        dbo.collection(user).deleteOne(documentToDeleteID, function(err, obj) {
+                            if (err) {
+                                console.log("Failed to delete this reminder");
+                                db.close();
+                                resolve(false);
+                            }
+                            if (obj) {
+                                console.log("Reminder successfully deleted!");
+                                db.close();
+                                resolve(true);
+                            }
+                        });
+
+                    } else {
+                        // No document with reminderNumber found
+                        console.log("Reminder not found");
+                        db.close();
+                        resolve(false);
+                    }
+                });
         });
     });
 }
@@ -158,75 +278,38 @@ function checkForDuplicates(user, reminderContent, reminderTime) {
 
 
 /*
-    Removes a document with reminderDocID (_id) for a given user
-*/
-function deleteReminder(user, reminderDocID) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
-        dbo.collection(user).findOne(
-            {
-                _id: reminderDocID
-            },
-            function(err, result) {
-                if (err) throw err;
-                if (result) {
-                    // Reminder with reminderNumber found - remove this document
-                    const documentToDeleteID = {_id: reminderDocID};
-                    dbo.collection(user).deleteOne(documentToDeleteID, function(err, obj) {
-                        if (err) {
-                            console.log("Failed to delete this reminder");
-                            throw err;
-                            db.close();
-                        } else {
-                            console.log("Reminder successfully deleted!");
-                        }
-                        db.close();
-                    });
-                    return true;
-                } else {
-                    // No document with reminderNumber found
-                    console.log("Reminder not found");
-                    db.close();
-                    return false;
-                }
-            });
-    });
-}
-
-/*
     Deletes all documents in collection for a given user
 */
 function clearAllReminders(user) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
+    return new Promise((resolve, reject) => {
+        console.log("Deleting all reminders for user " + user);
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
 
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
+        MongoClient.connect(url, function (err, db) {
+            if (err) reject(false);
+            const dbo = db.db(dbName);
 
-        dbo.listCollections({name: user}).next(function(err, collinfo) {
-            if (collinfo) {
-                dbo.collection(user).drop(function(err, delOK) {
-                    if (err) throw err;
-                    if (delOK) {
-                        console.log("Collection for user " + user + " was deleted");
-                        db.close();
-                        return true;
-                    } else {
-                        console.log("Failed to delete collection for user " + user);
-                        db.close();
-                        return false;
-                    }
-                });
-            } else {
-                console.log("Collection " + user + " not found");
-                db.close();
-                return false;
-            }
+            dbo.listCollections({name: user}).next(function (err, collinfo) {
+                if (collinfo) {
+                    dbo.collection(user).drop(function (err, delOK) {
+                        if (err) reject(false);
+                        if (delOK) {
+                            console.log("Collection for user " + user + " was deleted");
+                            db.close();
+                            resolve(true);
+                        } else {
+                            console.log("Failed to delete collection for user " + user);
+                            db.close();
+                            reject(false);
+                        }
+                    });
+                } else {
+                    console.log("Collection " + user + " not found");
+                    db.close();
+                    reject(false);
+                }
+            });
         });
     });
 }
@@ -235,7 +318,7 @@ function clearAllReminders(user) {
 /*
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
-function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDate, reminderRecurrence, snoozedToTime) {
+function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
     // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
     const today = new Date();
     const todaysDateYear = today.getFullYear();
@@ -274,7 +357,7 @@ function ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated, reminderDat
 
 // Main check-tree
     // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
-    if (!ifRepeated) {
+    if (!reminderRecurrence) {
         if (reminderDateYear == todaysDateYear &&
             reminderDateMonth == todaysDateMonth &&
             reminderDateDay == todaysDateDate) {
@@ -462,15 +545,14 @@ function showAllReminders4Today(user) {
         let todaysRemindersIDs = [];
 
         MongoClient.connect(url, function(err, db) {
-            if (err) resolve(false);
+            if (err) reject(false);
             const dbo = db.db(dbName);
 
             dbo.collection(user).find({}).toArray(function(err, result) {
-                if (err) resolve(false);
+                if (err) reject(false);
 
                 let reminderID = "";
                 let reminderTime = "";
-                let ifRepeated = null;
                 let reminderDate = "";
                 let reminderRecurrence = "";
                 let snoozedToTime = "";
@@ -479,13 +561,12 @@ function showAllReminders4Today(user) {
                     reminderID = result[i]["_id"];
                     reminderWasSet = result[i]["_id"].getTimestamp();
                     reminderTime = result[i]["reminderTime"];
-                    ifRepeated = result[i]["ifRepeated"];
                     reminderDate = result[i]["reminderDate"];
                     reminderRecurrence = result[i]["reminderRecurrence"];
                     snoozedToTime = result[i]["snoozedToTime"];
 
                     console.log('reminderID ' + reminderID);
-                    if (ifReminderIsToday(reminderWasSet, reminderTime, ifRepeated,
+                    if (ifReminderIsToday(reminderWasSet, reminderTime,
                         reminderDate, reminderRecurrence, snoozedToTime)) {
                         todaysRemindersIDs.push({
                             reminderID: reminderID,
@@ -495,10 +576,49 @@ function showAllReminders4Today(user) {
                     }
                 }
                 db.close();
-                resolve(todaysRemindersIDs);
+                resolve(sortRemindersByTime(todaysRemindersIDs));
             });
         });
     });
+}
+
+
+/*
+    Sorts a list of reminders by reminderTime; supportive function
+*/
+function sortRemindersByTime(remindersArray) {
+    // reminderTime is saved as a string "hh:mm"; let's add an int value (hh * 60 + mm) to each reminder object
+    let newRemindersArray = remindersArray;
+    console.log("newRemindersArray: " + newRemindersArray);
+    let reminderTime = "";
+    let reminderTimeMin = "";
+    let reminderTimeHoursInt = "";
+    let reminderTimeMinutesInt = "";
+    for (let i=0; i<remindersArray.length; i++) {
+        reminderTime = remindersArray[i]["reminderTime"];
+        reminderTimeHoursInt = Number(reminderTime.split(":")[0]);
+        reminderTimeMinutesInt = Number(reminderTime.split(":")[1]);
+        reminderTimeMin = reminderTimeHoursInt * 60 + reminderTimeMinutesInt;
+        newRemindersArray[i]["reminderTimeMin"] = reminderTimeMin;
+    }
+    return newRemindersArray.sort(compareReminders);
+}
+
+
+/*
+    Prepares sorting instructions for sortRemindersByTime()
+*/
+function compareReminders(a, b) {
+    const reminderA = a.reminderTimeMin;
+    const reminderB = b.reminderTimeMin;
+
+    let comparison = 0;
+    if (reminderA > reminderB) {
+        comparison = 1;
+    } else if (reminderA < reminderB) {
+        comparison = -1;
+    }
+    return comparison;
 }
 
 
@@ -569,7 +689,9 @@ function generateID(hexString) {
     return ObjectID;
 }
 
-
+/*
+    Sends a text message to FB Messenger
+*/
 function sendTextMessage(senderId, text) {
     request({
         url: 'https://graph.facebook.com/v2.6/me/messages',
@@ -582,9 +704,29 @@ function sendTextMessage(senderId, text) {
     });
 };
 
+
 module.exports = (event) => {
-    const senderId = event.sender.id;
-    const message = event.message.text;
+    let senderId = "";
+    let message = "";
+    let payload = "";
+    let speech = "";
+
+    if ("message" in event) {
+        senderId = event.sender.id;
+        message = event.message.text;
+    } else if ("postback" in event) {
+        senderId = event.sender.id;
+        if (event.postback.payload) {
+            message = event.postback.payload;
+        } else {
+            message = event.postback.title;
+        }
+    }
+
+    let cTime = new Date();
+    let utcHours = cTime.getHours();
+    cTime.setUTCHours(utcHours+3)
+    console.log('Time on server: ' + cTime);
 
     console.log();
     console.log('message from FB: ');
@@ -601,22 +743,79 @@ module.exports = (event) => {
         console.log(dfResponse);
 
         const actionTriggered = dfResponse.result.action;
+        const contexts = dfResponse.result.contexts;
+        let contextsList = [];
+        for (let i=0; i<contexts.length; i++) {
+            contextsList.push(contexts[i]["name"]);
+        }
+
+        console.log('actionTriggered: ' + actionTriggered);
+        console.log('contextsList: ' + contextsList);
 
 
         let AllReminders4Today = [];
         let actionIncomplete = true;
-        let speech = "";
         switch(actionTriggered) {
             // Displaying reminders [for today]
             case "reminders.get":
                 speech = "";
                 AllReminders4Today = showAllReminders4Today(senderId);
                 AllReminders4Today.then(function(data) {
-                    for (let i=0; i<data.length; i++) {
-                        if (i>0) { speech += "\n\n"; }
-                        speech += `${data[i]["reminderTime"]}\n${data[i]["reminderDescription"]}`;
+                    if (data.length>0) {
+                        speech += `Here's what we have till the end of the day:\n`;
+                        for (let i=0; i<data.length; i++) {
+                            if (i>0) { speech += "\n\n"; }
+                            speech += `\nReminder # ${i+1}`;
+                            speech += `\nTime: ${data[i]["reminderTime"]}`;
+                            speech += `\nDescription: ${data[i]["reminderDescription"]}`;
+                        }
+                        payload = {
+                            attachment:{
+                                type:"template",
+                                payload:{
+                                    template_type:"button",
+                                    text:speech,
+                                    buttons:[
+                                        {
+                                            type:"postback",
+                                            url:"Add reminder",
+                                            title:"remind me"
+                                        },
+                                        {
+                                            type:"postback",
+                                            url:"Delete a reminder",
+                                            title:"remove this reminder"
+                                        },
+                                        {
+                                            type:"postback",
+                                            url:"Clear all",
+                                            title:"delete all reminders"
+                                        }
+                                    ]
+                                }
+                            }
+                        };
+
+                    } else {
+                        speech = "Sorry but you have no reminders for today yet"
+                        payload = {
+                            attachment:{
+                                type:"template",
+                                payload:{
+                                    template_type:"button",
+                                    text:speech,
+                                    buttons:[
+                                        {
+                                            type:"postback",
+                                            url:"Add reminder",
+                                            title:"remind me"
+                                        }
+                                    ]
+                                }
+                            }
+                        };
                     }
-                    sendTextMessage(senderId, speech);
+                    sendTextMessage(senderId, payload);
                 });
                 break;
 
@@ -624,22 +823,91 @@ module.exports = (event) => {
             case "reminders.add":
                 speech = "";
                 let reminderDescription = "";
-                let reminderRecurrence = "";
-                let ifRepeated = false;
                 let reminderTime = "";
-                let reminderDate = "";
+                let reminderRecurrence = null;
+                let reminderDate = null;
 
                 actionIncomplete = dfResponse.result.actionIncomplete;
 
                 if (!actionIncomplete) {
-                    reminderTime = dfResponse.result.parameters.time.slice(0, 5); // 10:00:00
-                    reminderDate = dfResponse.result.parameters.date; // 2018-05-22, month 1-12 not 0-11
+                    // All required info entered (reminderDescription and reminderTime)
                     reminderDescription = dfResponse.result.parameters.name;
+                    reminderTime = dfResponse.result.parameters.time.slice(0, 5); // 10:00:00 >> 10:00
                     reminderRecurrence = dfResponse.result.parameters.recurrence;
-                    if (reminderRecurrence === "") { ifRepeated = true; } else { ifRepeated = false; }
+                    if (!reminderRecurrence) {
+                        reminderDate = dfResponse.result.parameters.date; // 2018-05-22, month 1-12
+                    }
 
+                    // Save reminder to db
+                    const newReminder = createReminder(senderId, reminderDescription, reminderTime, reminderDate, reminderRecurrence);
+                    newReminder.then(function(data) {
+                        if (data) {
+                            let reminderRecurrenceWording = "";
+                            let reminderDateWording = "";
+                            if (reminderRecurrence) {
+                                reminderRecurrenceWording = ` (${reminderRecurrence})`;
+                            }
+                            if (reminderDate) {
+                                reminderDateWording = `${reminderDate}`;
+                            }
+                            speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
+                        } else {
+                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
+                        }
+                        sendTextMessage(senderId, speech);
+                    })
+                        .catch(err => {
+                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
+                            sendTextMessage(senderId, speech);
+                        })
 
-                    speech = `${reminderDate} - ${reminderTime} - ${reminderDescription } - ${reminderRecurrence}`;
+                } else {
+                    // Continue slot-filling
+                    speech = dfResponse.result.fulfillment.speech;
+                    sendTextMessage(senderId, speech);
+                }
+                break;
+
+            // Checking if any reminders exist before deleting all reminders
+            case "reminders.remove":
+                const reminderQuantity = showAllReminders4Today(senderId);
+                reminderQuantity.then(remindersArray => {
+                    if (remindersArray.length === 0) {
+                        speech = "Sorry but our reminders' list is empty, nothing to delete";
+                        sendTextMessage(senderId, speech);
+                    } else {
+                        speech = dfResponse.result.fulfillment.speech;
+                        sendTextMessage(senderId, speech);
+                    }
+                });
+                break;
+
+            // Deleting all reminders
+            case "reminders.remove-confirmed":
+                const userEntered = dfResponse.result.parameters.deletion_confirmation;
+                console.log("userEntered: " + userEntered);
+                if (userEntered === "CLEAR ALL") {
+                    console.log('Deleting reminders...');
+                    const remindersDeletionFlag = clearAllReminders(senderId);
+                    remindersDeletionFlag.then(function(data) {
+                        if (data) {
+                            speech = "All reminders have been successfully erased!";
+                        } else {
+                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                        }
+                        sendTextMessage(senderId, speech);
+                    })
+                        .catch(err => {
+                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                            sendTextMessage(senderId, speech);
+                        })
+                }
+                break;
+
+            // Incorrect reminders confirmation is cached by Default Fallback intent
+            case "input.unknown":
+                if (contextsList.includes("remove-confirm")) {
+                    speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
                     sendTextMessage(senderId, speech);
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
@@ -647,10 +915,63 @@ module.exports = (event) => {
                 }
                 break;
 
+            // Deleting at specific reminder
+            case "remindersget.deletethisreminder":
+                const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
+                if (reminderNumber !== "" && reminderNumber !== 0) {
+                    console.log("Reminder to delete: " + reminderNumber);
+
+                    showAllReminders4Today(senderId)
+                        .then(remindersArray => {
+                            console.log("Got a list of todays reminders, N=" + remindersArray.length);
+                            let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
+                            console.log("Reminder to delete has ID " + reminderDocID);
+                            return reminderDocID;
+                            ;
+                        })
+                        .then(reminderDocID => {
+                            let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
+                            console.log("Result of reminder deletion: " + deleteReminderFlag);
+                            return deleteReminderFlag;
+                        })
+                        .then(deleteReminderFlag => {
+                            if (deleteReminderFlag) {
+                                let remindersArrayUpdated = showAllReminders4Today(senderId);
+                                return remindersArrayUpdated;
+                            } else {
+                                return false;
+                            }
+                        })
+                        .then(result => {
+                            if (result) {
+                                if (result.length>0) {
+                                    speech += `Deleted!\nHere's what's left:\n`;
+                                    for (let i=0; i<result.length; i++) {
+                                        if (i>0) { speech += "\n\n"; }
+                                        speech += `\nReminder # ${i+1}`;
+                                        speech += `\nTime: ${result[i]["reminderTime"]}`;
+                                        speech += `\nDescription: ${result[i]["reminderDescription"]}`;
+                                    }
+                                } else {
+                                    speech = "Done!\nAnd at the moment we don't have any reminders left for today";
+                                }
+                            } else {
+                                speech = "Sorry but I failed to remove this reminder";
+                            }
+                            sendTextMessage(senderId, speech);
+                        })
+                        .catch( error => {
+                                console.log("Some error in promise chain: " + error);
+                            }
+                        );
+                } else {
+                    speech = dfResponse.result.fulfillment.speech;
+                    sendTextMessage(senderId, speech);
+                }
+                break;
 
             // Default response (no key intents triggered) - pass DF's response
             default:
-                speech = "";
                 speech = dfResponse.result.fulfillment.speech;
                 sendTextMessage(senderId, speech);
         }

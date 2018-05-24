@@ -39,7 +39,7 @@ let hi = [
         {
             "title":"Clear reminders",
             "type":"postback",
-            "payload":"delete reminders"
+            "payload":"delete all reminders"
         }
         ]
       }
@@ -64,7 +64,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
     {
         "title":"Clear reminders",
         "type":"postback",
-        "payload":"delete reminders"
+        "payload":"delete all reminders"
     }
 ]
 }' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
@@ -83,7 +83,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
   "thread_state":"new_thread",
   "call_to_actions":[
     {
-      "payload":"Greeting"
+      "payload":"Getting_started_command"
     }
   ]
 }' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
@@ -93,7 +93,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
 curl -X POST -H "Content-Type: application/json" -d '{
   "setting_type":"greeting",
   "greeting":{
-    "text":"Hi {{user_first_name}}! Need help to manage your reminders? I can do that ;)"
+    "text":"Hi {{user_first_name}}! Need to manage your reminders? I can help with that ;)"
   }
 }' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD"
 
@@ -692,22 +692,42 @@ function generateID(hexString) {
 /*
     Sends a text message to FB Messenger
 */
-function sendTextMessage(senderId, text) {
+function sendMessage(senderId, ourMessage) {
     request({
         url: 'https://graph.facebook.com/v2.6/me/messages',
         qs: { access_token: FACEBOOK_ACCESS_TOKEN },
         method: 'POST',
         json: {
             recipient: { id: senderId },
-            message: { text },
+            message: ourMessage,
         }
     });
 };
 
 
 module.exports = (event) => {
-    const senderId = event.sender.id;
-    const message = event.message.text;
+    let senderId = "";
+    let message = "";
+    let customPayload = "";
+    let quickButtons = "";
+    let speech = "";
+
+    if ("message" in event) {
+        senderId = event.sender.id;
+        message = event.message.text;
+    } else if ("postback" in event) {
+        senderId = event.sender.id;
+        if (event.postback.payload) {
+            message = event.postback.payload;
+        } else {
+            message = event.postback.title;
+        }
+    }
+
+    let cTime = new Date();
+    let utcHours = cTime.getHours();
+    cTime.setUTCHours(utcHours+3)
+    console.log('Time on server: ' + cTime);
 
     console.log();
     console.log('message from FB: ');
@@ -716,7 +736,7 @@ module.exports = (event) => {
     //console.log('event object from FB: ');
     //console.log(event);
 
-    const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot3'});
+    const apiaiSession = apiAiClient.textRequest(message, {sessionId: 'remindmebot'});
 
     apiaiSession.on('response', (dfResponse) => {
         console.log();
@@ -736,7 +756,6 @@ module.exports = (event) => {
 
         let AllReminders4Today = [];
         let actionIncomplete = true;
-        let speech = "";
         switch(actionTriggered) {
             // Displaying reminders [for today]
             case "reminders.get":
@@ -744,17 +763,99 @@ module.exports = (event) => {
                 AllReminders4Today = showAllReminders4Today(senderId);
                 AllReminders4Today.then(function(data) {
                     if (data.length>0) {
-                        speech += `Here are our reminders left till the end of the day:\n`;
+                        speech += `Here's what we have till the end of the day:\n`;
                         for (let i=0; i<data.length; i++) {
                             if (i>0) { speech += "\n\n"; }
                             speech += `\nReminder # ${i+1}`;
                             speech += `\nTime: ${data[i]["reminderTime"]}`;
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
+
+                        // Buttons template - not working
+                        customPayload = {
+                            "attachment":{
+                                "type":"template",
+                                "payload":{
+                                    "text": speech,
+                                    "template_type":"button",
+                                    "buttons":[
+                                        {
+                                            "type":"postback",
+                                            "url":"Add reminder",
+                                            "title":"remind me"
+                                        },
+                                        {
+                                            "type":"postback",
+                                            "url":"Delete a reminder",
+                                            "title":"remove this reminder"
+                                        },
+                                        {
+                                            "type":"postback",
+                                            "url":"Clear all",
+                                            "title":"delete all reminders"
+                                        }
+                                    ]
+                                }
+                            }
+                        };
+
+                        // Quick response buttons - Ok
+                        quickButtons = {
+                            "text": speech,
+                                "quick_replies":[
+                                {
+                                    "content_type":"text",
+                                    "title":"Add",
+                                    "payload":"set a reminder",
+                                },
+                                {
+                                    "content_type":"text",
+                                    "title":"Delete a reminder",
+                                    "payload":"remove a reminder",
+                                },
+                                {
+                                    "content_type":"text",
+                                    "title":"Delete all",
+                                    "payload":"delete all reminders",
+                                }
+                            ]
+                        };
+
                     } else {
-                        speech = "Sorry but you have no reminders for today"
+                        speech = "Sorry but you have no reminders for today yet";
+
+                        // Buttons template - not working
+                        customPayload = {
+                            attachment:{
+                                type:"template",
+                                payload:{
+                                    template_type:"button",
+                                    text:speech,
+                                    buttons:[
+                                        {
+                                            type:"postback",
+                                            url:"Add reminder",
+                                            title:"remind me"
+                                        }
+                                    ]
+                                }
+                            }
+                        };
+
+                        // Quick response buttons - Ok
+                        quickButtons = {
+                            "text": speech,
+                            "quick_replies":[
+                                {
+                                    "content_type":"text",
+                                    "title":"Add reminder",
+                                    "payload":"set a reminder",
+                                }
+                            ]
+                        };
                     }
-                    sendTextMessage(senderId, speech);
+
+                sendMessage(senderId, quickButtons);
                 });
                 break;
 
@@ -793,25 +894,39 @@ module.exports = (event) => {
                         } else {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
                         }
-                        sendTextMessage(senderId, speech);
+                        sendMessage(senderId, {text: speech});
                     })
                         .catch(err => {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
-                            sendTextMessage(senderId, speech);
+                            sendMessage(senderId, {text: speech});
                         })
 
                 } else {
                     // Continue slot-filling
                     speech = dfResponse.result.fulfillment.speech;
-                    sendTextMessage(senderId, speech);
+                    sendMessage(senderId, {text: speech});
                 }
+                break;
+
+            // Checking if any reminders exist before deleting all reminders
+            case "reminders.remove":
+                const reminderQuantity = showAllReminders4Today(senderId);
+                reminderQuantity.then(remindersArray => {
+                    if (remindersArray.length === 0) {
+                        speech = "Sorry but our reminders' list is empty, nothing to delete";
+                        sendMessage(senderId, {text: speech});
+                    } else {
+                        speech = dfResponse.result.fulfillment.speech;
+                        sendMessage(senderId, {text: speech});
+                    }
+                });
                 break;
 
             // Deleting all reminders
             case "reminders.remove-confirmed":
                 const userEntered = dfResponse.result.parameters.deletion_confirmation;
                 console.log("userEntered: " + userEntered);
-                if (userEntered == "CLEAR ALL") {
+                if (userEntered === "CLEAR ALL") {
                     console.log('Deleting reminders...');
                     const remindersDeletionFlag = clearAllReminders(senderId);
                     remindersDeletionFlag.then(function(data) {
@@ -820,11 +935,11 @@ module.exports = (event) => {
                         } else {
                             speech = "Unfortunately I failed to delete your reminders.. :(";
                         }
-                        sendTextMessage(senderId, speech);
+                        sendMessage(senderId, {text: speech});
                     })
                         .catch(err => {
                             speech = "Unfortunately I failed to delete your reminders.. :(";
-                            sendTextMessage(senderId, speech);
+                            sendMessage(senderId, {text: speech});
                         })
                 }
                 break;
@@ -833,67 +948,122 @@ module.exports = (event) => {
             case "input.unknown":
                 if (contextsList.includes("remove-confirm")) {
                     speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
-                    sendTextMessage(senderId, speech);
+                    sendMessage(senderId, {text: speech});
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
-                    sendTextMessage(senderId, speech);
+                    sendMessage(senderId, {text: speech});
                 }
                 break;
 
             // Deleting at specific reminder
             case "remindersget.deletethisreminder":
                 const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
-                console.log("Reminder to delete: " + reminderNumber);
+                if (reminderNumber !== "" && reminderNumber !== 0) {
+                    console.log("Reminder to delete: " + reminderNumber);
 
-                showAllReminders4Today(senderId)
-                    .then(remindersArray => {
-                        console.log("Got a list of todays reminders, N=" + remindersArray.length);
-                        let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
-                        console.log("Reminder to delete has ID " + reminderDocID);
-                        return reminderDocID;
-                        ;
-                    })
-                    .then(reminderDocID => {
-                        let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
-                        console.log("Result of reminder deletion: " + deleteReminderFlag);
-                        return deleteReminderFlag;
-                    })
-                    .then(deleteReminderFlag => {
-                        if (deleteReminderFlag) {
-                            let remindersArrayUpdated = showAllReminders4Today(senderId);
-                            return remindersArrayUpdated;
-                        } else {
-                            return false;
-                        }
-                    })
-                    .then(result => {
-                        if (result) {
-                            if (result.length>0) {
-                                speech += `\n\nHere's what's left:\n`;
-                                for (let i=0; i<result.length; i++) {
-                                    if (i>0) { speech += "\n\n"; }
-                                    speech += `\nReminder # ${i+1}`;
-                                    speech += `\nTime: ${result[i]["reminderTime"]}`;
-                                    speech += `\nDescription: ${result[i]["reminderDescription"]}`;
+                    showAllReminders4Today(senderId)
+                        .then(remindersArray => {
+                            console.log("Got a list of todays reminders, N=" + remindersArray.length);
+                            let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
+                            console.log("Reminder to delete has ID " + reminderDocID);
+                            return reminderDocID;
+                            ;
+                        })
+                        .then(reminderDocID => {
+                            let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
+                            console.log("Result of reminder deletion: " + deleteReminderFlag);
+                            return deleteReminderFlag;
+                        })
+                        .then(deleteReminderFlag => {
+                            if (deleteReminderFlag) {
+                                let remindersArrayUpdated = showAllReminders4Today(senderId);
+                                return remindersArrayUpdated;
+                            } else {
+                                return false;
+                            }
+                        })
+                        .then(result => {
+                            if (result) {
+                                if (result.length>0) {
+                                    speech += `Deleted!\nHere's what's left:\n`;
+                                    for (let i=0; i<result.length; i++) {
+                                        if (i>0) { speech += "\n\n"; }
+                                        speech += `\nReminder # ${i+1}`;
+                                        speech += `\nTime: ${result[i]["reminderTime"]}`;
+                                        speech += `\nDescription: ${result[i]["reminderDescription"]}`;
+                                    }
+                                    quickButtons = {
+                                        "text": speech,
+                                        "quick_replies":[
+                                            {
+                                                "content_type":"text",
+                                                "title":"Add",
+                                                "payload":"set a reminder",
+                                            },
+                                            {
+                                                "content_type":"text",
+                                                "title":"Delete a reminder",
+                                                "payload":"remove a reminder",
+                                            },
+                                            {
+                                                "content_type":"text",
+                                                "title":"Delete all",
+                                                "payload":"delete all reminders",
+                                            }
+                                        ]
+                                    };
+                                } else {
+                                    speech = "Done!\nAnd at the moment we don't have any reminders left for today";
+                                    quickButtons = {
+                                        "text": speech,
+                                        "quick_replies":[
+                                            {
+                                                "content_type":"text",
+                                                "title":"Add reminder",
+                                                "payload":"set a reminder",
+                                            }
+                                        ]
+                                    };
                                 }
                             } else {
-                                speech = "And at the moment we don't have any reminders left for today";
+                                speech = "Sorry but I failed to remove this reminder";
+                                quickButtons = {
+                                    "text": speech,
+                                    "quick_replies":[
+                                        {
+                                            "content_type":"text",
+                                            "title":"Add",
+                                            "payload":"set a reminder",
+                                        },
+                                        {
+                                            "content_type":"text",
+                                            "title":"Delete a reminder",
+                                            "payload":"remove a reminder",
+                                        },
+                                        {
+                                            "content_type":"text",
+                                            "title":"Delete all",
+                                            "payload":"delete all reminders",
+                                        }
+                                    ]
+                                };
                             }
-                        } else {
-                            speech = "Sorry but I failed to remove this reminder";
-                        }
-                        sendTextMessage(senderId, speech);
-                    })
-                    .catch( error => {
-                            console.log("Some error in promise chain: " + error);
-                    }
-                    );
+                            sendMessage(senderId, quickButtons);
+                        })
+                        .catch( error => {
+                                console.log("Some error in promise chain: " + error);
+                            }
+                        );
+                } else {
+                    speech = dfResponse.result.fulfillment.speech;
+                    sendMessage(senderId, {text: speech});
+                }
                 break;
 
             // Default response (no key intents triggered) - pass DF's response
             default:
                 speech = dfResponse.result.fulfillment.speech;
-                sendTextMessage(senderId, speech);
+                sendMessage(senderId, {text: speech});
         }
     });
 
