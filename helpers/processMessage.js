@@ -780,22 +780,74 @@ function generateID(hexString) {
     Sends a message to FB Messenger
 */
 function sendMessage(senderId, ourMessage) {
-    request({
-        url: 'https://graph.facebook.com/v2.6/me/messages',
-        qs: { access_token: FACEBOOK_ACCESS_TOKEN },
-        method: 'POST',
-        json: {
-            recipient: { id: senderId },
-            message: ourMessage,
-        }
+    return new Promise((resolve, reject) => {
+        request({
+            url: 'https://graph.facebook.com/v2.6/me/messages',
+            qs: {access_token: FACEBOOK_ACCESS_TOKEN},
+            method: 'POST',
+            json: {
+                recipient: {id: senderId},
+                message: ourMessage,
+            }
+        });
+        resolve(true);
     });
+}
+
+// #########################  Button templates  ###################################
+
+const buttonsAddRemoveOneClearAllReminders = {
+    attachment:{
+        type:"template",
+            payload:{
+            text: "What should I do next?",
+                template_type:"button",
+                buttons:[
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                },
+                {
+                    type:"postback",
+                    title:"Delete a reminder",
+                    payload:"remove this reminder"
+                },
+                {
+                    type:"postback",
+                    title:"Clear all",
+                    payload:"delete all reminders"
+                }
+            ]
+        }
+    }
 };
+
+
+let buttonsAddReminder = {
+    attachment:{
+        type:"template",
+            payload:{
+            template_type:"button",
+                text: "What should I do next?",
+                buttons:[
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                }
+            ]
+        }
+    }
+};
+
+// #########################  Button templates END  ###############################
 
 
 module.exports = (event) => {
     let senderId = "";
     let message = "";
-    let customPayload = "";
+    let buttonTemplate = "";
     let quickButtons = "";
     let speech = "";
 
@@ -858,91 +910,21 @@ module.exports = (event) => {
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
 
-                        // Buttons template - not working
-                        customPayload = {
-                            "attachment":{
-                                "type":"template",
-                                "payload":{
-                                    "text": speech,
-                                    "template_type":"button",
-                                    "buttons":[
-                                        {
-                                            "type":"postback",
-                                            "url":"Add reminder",
-                                            "title":"remind me"
-                                        },
-                                        {
-                                            "type":"postback",
-                                            "url":"Delete a reminder",
-                                            "title":"remove this reminder"
-                                        },
-                                        {
-                                            "type":"postback",
-                                            "url":"Clear all",
-                                            "title":"delete all reminders"
-                                        }
-                                    ]
-                                }
-                            }
-                        };
-
-                        // Quick response buttons - Ok
-                        quickButtons = {
-                            "text": speech,
-                                "quick_replies":[
-                                {
-                                    "content_type":"text",
-                                    "title":"Add",
-                                    "payload":"set a reminder",
-                                },
-                                {
-                                    "content_type":"text",
-                                    "title":"Delete a reminder",
-                                    "payload":"remove a reminder",
-                                },
-                                {
-                                    "content_type":"text",
-                                    "title":"Delete all",
-                                    "payload":"delete all reminders",
-                                }
-                            ]
-                        };
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsAddRemoveOneClearAllReminders;
 
                     } else {
                         speech = "Sorry but you have no reminders for today yet";
 
-                        // Buttons template - not working
-                        customPayload = {
-                            attachment:{
-                                type:"template",
-                                payload:{
-                                    template_type:"button",
-                                    text:speech,
-                                    buttons:[
-                                        {
-                                            type:"postback",
-                                            url:"Add reminder",
-                                            title:"remind me"
-                                        }
-                                    ]
-                                }
-                            }
-                        };
+                        // Button template - 1 button "Add reminder"
+                        buttonTemplate = buttonsAddReminder;
 
-                        // Quick response buttons - Ok
-                        quickButtons = {
-                            "text": speech,
-                            "quick_replies":[
-                                {
-                                    "content_type":"text",
-                                    "title":"Add reminder",
-                                    "payload":"set a reminder",
-                                }
-                            ]
-                        };
                     }
 
-                sendMessage(senderId, quickButtons);
+                const firstMessage = sendMessage(senderId, {text: speech});
+                firstMessage.then(result => {
+                    sendMessage(senderId, buttonTemplate);
+                })
                 });
                 break;
 
@@ -978,14 +960,30 @@ module.exports = (event) => {
                                 reminderDateWording = `${reminderDate}`;
                             }
                             speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
+
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
                         } else {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
+                            // Button template - 1 button "Add reminder"
+                            buttonTemplate = buttonsAddReminder;
                         }
-                        sendMessage(senderId, {text: speech});
+
+                        const firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            sendMessage(senderId, buttonTemplate);
+                        })
                     })
                         .catch(err => {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
-                            sendMessage(senderId, {text: speech});
+
+                            // Button template - 1 button "Add reminder"
+                            buttonTemplate = buttonsAddReminder;
+
+                            const firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
 
                 } else {
@@ -1017,16 +1015,27 @@ module.exports = (event) => {
                     console.log('Deleting reminders...');
                     const remindersDeletionFlag = clearAllReminders(senderId);
                     remindersDeletionFlag.then(function(data) {
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                         if (data) {
-                            speech = "All reminders have been successfully erased!";
+                            speech = "All reminders have been successfully erased!\nWhat shall we do next?";
                         } else {
-                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                            speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
                         }
-                        sendMessage(senderId, {text: speech});
+                        const firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            sendMessage(senderId, buttonTemplate);
+                        })
                     })
                         .catch(err => {
-                            speech = "Unfortunately I failed to delete your reminders.. :(";
-                            sendMessage(senderId, {text: speech});
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+                            speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
+                            const firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
                 }
                 break;
@@ -1034,8 +1043,16 @@ module.exports = (event) => {
             // Incorrect reminders confirmation is cached by Default Fallback intent
             case "input.unknown":
                 if (contextsList.includes("remove-confirm")) {
+                    // Button template - buttons "Add/Remove one/Clear all"
+                    buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                     speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
-                    sendMessage(senderId, {text: speech});
+
+                    const firstMessage = sendMessage(senderId, {text: speech});
+                    firstMessage.then(result => {
+                        sendMessage(senderId, buttonTemplate);
+                    })
+
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
                     sendMessage(senderId, {text: speech});
@@ -1079,63 +1096,27 @@ module.exports = (event) => {
                                         speech += `\nTime: ${result[i]["reminderTime"]}`;
                                         speech += `\nDescription: ${result[i]["reminderDescription"]}`;
                                     }
-                                    quickButtons = {
-                                        "text": speech,
-                                        "quick_replies":[
-                                            {
-                                                "content_type":"text",
-                                                "title":"Add",
-                                                "payload":"set a reminder",
-                                            },
-                                            {
-                                                "content_type":"text",
-                                                "title":"Delete a reminder",
-                                                "payload":"remove a reminder",
-                                            },
-                                            {
-                                                "content_type":"text",
-                                                "title":"Delete all",
-                                                "payload":"delete all reminders",
-                                            }
-                                        ]
-                                    };
+
+                                    // Button template - buttons "Add/Remove one/Clear all"
+                                    buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                                 } else {
+                                    // Button template - 1 button "Add reminder"
+                                    buttonTemplate = buttonsAddReminder;
+
                                     speech = "Done!\nAnd at the moment we don't have any reminders left for today";
-                                    quickButtons = {
-                                        "text": speech,
-                                        "quick_replies":[
-                                            {
-                                                "content_type":"text",
-                                                "title":"Add reminder",
-                                                "payload":"set a reminder",
-                                            }
-                                        ]
-                                    };
                                 }
                             } else {
+                                // Button template - buttons "Add/Remove one/Clear all"
+                                buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                                 speech = "Sorry but I failed to remove this reminder";
-                                quickButtons = {
-                                    "text": speech,
-                                    "quick_replies":[
-                                        {
-                                            "content_type":"text",
-                                            "title":"Add",
-                                            "payload":"set a reminder",
-                                        },
-                                        {
-                                            "content_type":"text",
-                                            "title":"Delete a reminder",
-                                            "payload":"remove a reminder",
-                                        },
-                                        {
-                                            "content_type":"text",
-                                            "title":"Delete all",
-                                            "payload":"delete all reminders",
-                                        }
-                                    ]
-                                };
+
                             }
-                            sendMessage(senderId, quickButtons);
+                            const firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
                         .catch( error => {
                                 console.log("Some error in promise chain: " + error);
