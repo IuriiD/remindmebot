@@ -315,13 +315,42 @@ function clearAllReminders(user) {
     });
 }
 
+/*
+    Gets all reminders for a given userID
+    Separated in a function due to promisification
+*/
+function allUsersRemindersFromDB(userID) {
+    return new Promise((resolve, reject) => {
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+
+        MongoClient.connect(url, function (err, db) {
+            if (err) reject(false);
+            const dbo = db.db(dbName);
+
+            dbo.collection(userID).find({}).toArray(function (err, remindersArr) {
+                if (err) reject(false);
+                if (remindersArr) {
+                    console.log();
+                    console.log("Hello from allUsersRemindersFromDB()");
+                    resolve(remindersArr);
+                }
+            });
+        });
+    });
+}
 
 /*
     Returns an array of reminder that should be executed at this minute
 */
-function remindersToAler() {
+function remindersToAlert() {
     return new Promise((resolve, reject) => {
+        console.log();
+        console.log('************ remindersToAlert ************');
         let userID = "";
+        let reminderTimeMS = null;
+        let reminderConfirmed = null;
+        let todaysDateStr = null;
         let allReminderToAlert = [];
 
         const currTime = new Date();
@@ -339,59 +368,98 @@ function remindersToAler() {
             dbo.listCollections().toArray(function(err, collArray) {
                 if (err) reject(false);
 
+                console.log();
+                console.log('Collestions: ' + JSON.stringify(collArray));
                 if (collArray && collArray.length>0) {
                     // Get a list of reminders and a collection name (=sender ID)
                     for (let i=0; i<collArray.length; i++) {
                         userID = collArray[i]["name"];
 
-                        dbo.collection(userID).find({}).toArray(function(err, remindersArr) {
-                            if (err) reject(false);
+                        console.log();
+                        console.log('Working with collection ' + userID);
 
-                            // For every reminder in array check
+                        // 'Outer' promise chain - get all reminders for given user, then log selected
+                        allUsersRemindersFromDB(userID).then(remindersArr => {
+
+                            console.log();
+                            console.log('Reminders: ' + JSON.stringify(remindersArr));
+
+                            let chain = Promise.resolve();
                             for (let x=0; x<remindersArr.length; x++) {
-                                let reminderConfirmed = remindersArr[x]["reminderConfirmed"];
-                                let reminderID = remindersArr[x]["_id"];
-                                let reminderTime = remindersArr[x]["reminderTime"];
-                                let reminderWasSet = reminderID.getTimestamp();
-                                let reminderDate = remindersArr[x]["reminderDate"];
-                                let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
-                                let snoozedToTime = remindersArr[x]["snoozeToTime"];
 
-                                // .. if this reminder is for today and if yes, ...
-                                if (ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime)) {
-                                    // .. if it's in past and ...
+                                chain = chain.then(() => {
+                                    reminderConfirmed = remindersArr[x]["reminderConfirmed"];
+                                    let reminderID = remindersArr[x]["_id"];
+                                    let reminderTime = remindersArr[x]["reminderTime"];
+                                    let reminderWasSet = reminderID.getTimestamp();
+                                    let reminderDate = remindersArr[x]["reminderDate"];
+                                    let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
+                                    let snoozedToTime = remindersArr[x]["snoozeToTime"];
                                     if (snoozedToTime) {
                                         reminderTime = snoozedToTime;
+                                    }
 
                                     let reminderHours = Number(reminderTime.split(":")[0]);
                                     let reminderMinutes = Number(reminderTime.split(":")[1]);
                                     let remTime = new Date();
                                     remTime.setHours(reminderHours, reminderMinutes, 0, 0);
-                                    const reminderTimeMS = remTime.getTime();
+                                    reminderTimeMS = remTime.getTime();
 
-                                    if (reminderTimeMS<currTimeMS) {
-                                        // if this reminder was not confirmed today yet (reminderConfirmed != today's date)
-                                        const todaysDateY = currTime.getFullYear();
-                                        const todaysDateM = currTime.getMonth()+1;
-                                        const todaysDateD = currTime.getDate();
-                                        const todaysDateStr = `${todaysDateY}-${todaysDateM}-${todaysDateD}`;
-                                        if (reminderConfirmed !== todaysDateStr) {
+                                    const todaysDateY = currTime.getFullYear();
+                                    const todaysDateM = currTime.getMonth()+1;
+                                    const todaysDateD = currTime.getDate();
+                                    todaysDateStr = `${todaysDateY}-${todaysDateM}-${todaysDateD}`;
+
+                                    console.log();
+                                    console.log('Reminder #' + reminderID);
+
+                                    return ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime)
+
+                                    .then(ifToday => {
+                                        console.log("--------------------");
+                                        console.log("ifToday: " + ifToday);
+                                        console.log("reminderTimeMS: " + reminderTimeMS);
+                                        console.log("currTimeMS: " + currTimeMS);
+                                        if (reminderTimeMS<currTimeMS) {
+                                            console.log("reminderTimeMS<currTimeMS: true");
+                                        } else {
+                                            console.log("reminderTimeMS<currTimeMS: false");
+                                        }
+                                        console.log("reminderConfirmed: " + reminderConfirmed);
+                                        console.log("todaysDateStr: " + todaysDateStr);
+                                        if (reminderConfirmed!=todaysDateStr) {
+                                            console.log("reminderConfirmed!=todaysDateStr: true");
+                                        } else {
+                                            console.log("reminderConfirmed!=todaysDateStr: false");
+                                        }
+                                        console.log("--------------------");
+
+                                        if (ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr) {
+                                            console.log("(ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr): true");
+                                            sendMessage(userID, {text: "Hello"});
                                             allReminderToAlert.push(
                                                 {
                                                     "userID": userID,
                                                     "_id": reminderID
                                                 }
-                                            )
+                                            );
+                                            console.log('allReminderToAlert: ' + JSON.stringify(allReminderToAlert));
+                                        } else {
+                                            console.log("(ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr): false");
                                         }
-                                    }
-                                    }
-                                }
+                                    })
+                                })
                             }
-
-                        });
+                            return allReminderToAlert;
+                        })
+                            .then(data => {
+                                resolve(data);
+                            })
+                            .catch((err) => {
+                                console.log("Error happened: " + err);
+                            })
                     }
 
-                    resolve(allReminderToAlert);
                 } else {
                     resolve(false);
                 }
@@ -406,222 +474,226 @@ function remindersToAler() {
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
 function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
-    // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
-    const today = new Date();
-    today.setUTCHours(today.getHours()+3);
-    const todaysDateYear = today.getFullYear();
-    const todaysDateMonth = today.getMonth()+1; // 0-11 >> 1-12
-    const todaysDateDate = today.getDate();
-    const dayOfWeek = today.getDay(); // 0-6, Sun=0
-    const currentTime = today.getTime(); // ms
+    return new Promise((resolve, reject) => {
+        // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
+        const today = new Date();
+        today.setUTCHours(today.getHours() + 3);
+        const todaysDateYear = today.getFullYear();
+        const todaysDateMonth = today.getMonth() + 1; // 0-11 >> 1-12
+        const todaysDateDate = today.getDate();
+        const dayOfWeek = today.getDay(); // 0-6, Sun=0
+        //const currentTime = today.getTime(); // ms - at first I wanted to display only those todays' reminders that were
+                                                // in future, that is between currentTime and todayEnds, ms
 
-    const todayBeganMS = today.setHours(0, 0, 0, 0);
-    const todayEnds = todayBeganMS + 86400000-1; // ms in 1 day
+        const todayBeganMS = today.setHours(0, 0, 0, 0);
+        const todayEnds = todayBeganMS + 86400000 - 1; // ms in 1 day
 
-    // Working with reminder's time data
-    if (snoozedToTime) {
-        reminderTime = snoozedToTime;
-    }
+        // Working with reminder's time data
+        if (snoozedToTime) {
+            reminderTime = snoozedToTime;
+        }
 
-    // Parse reminderTime and transform it into ms
-    const reminderTimeHours = reminderTime.split(":")[0];
-    const reminderTimeMinutes = reminderTime.split(":")[1];
-    const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
+        // Parse reminderTime and transform it into ms
+        const reminderTimeHours = reminderTime.split(":")[0];
+        const reminderTimeMinutes = reminderTime.split(":")[1];
+        const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
 
-    // To get day of the week and date reminder was set (for "Weekly" recurrence cases) we need _id field
-    const reminderWasSetDay = reminderWasSet.getDay();
-    const reminderWasSetDate = reminderWasSet.getDate();
+        // To get day of the week and date reminder was set (for "Weekly" recurrence cases) we need _id field
+        const reminderWasSetDay = reminderWasSet.getDay();
+        const reminderWasSetDate = reminderWasSet.getDate();
 
-    // Parse reminderDate to separate year, month and date
-    let reminderDateYear = "";
-    let reminderDateMonth = "";
-    let reminderDateDay = "";
-    if (reminderDate) {
-        reminderDateYear = reminderDate.split("-")[0];
-        reminderDateMonth = reminderDate.split("-")[1];
-        reminderDateDay = reminderDate.split("-")[2];
-    }
+        // Parse reminderDate to separate year, month and date
+        let reminderDateYear = "";
+        let reminderDateMonth = "";
+        let reminderDateDay = "";
+        if (reminderDate) {
+            reminderDateYear = reminderDate.split("-")[0];
+            reminderDateMonth = reminderDate.split("-")[1];
+            reminderDateDay = reminderDate.split("-")[2];
+        }
 
-// Main check-tree
-    // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
-    if (!reminderRecurrence) {
-        if (reminderDateYear == todaysDateYear &&
-            reminderDateMonth == todaysDateMonth &&
-            reminderDateDay == todaysDateDate) {
-            return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
+        // Main check-tree
+        // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
+        if (!reminderRecurrence) {
+            if (reminderDateYear == todaysDateYear &&
+                reminderDateMonth == todaysDateMonth &&
+                reminderDateDay == todaysDateDate) {
+                console.log("It's today! (ifReminderIsToday)");
+                resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+            } else {
+                console.log("It's NOT today! (ifReminderIsToday)");
+                resolve(false);
+            }
+
+            // If it's a recurrent reminder
         } else {
-            return false;
+            switch (reminderRecurrence) {
+                // Daily - check if reminder's time hasn't passed today
+                case "Daily":
+                    if (reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds) {
+                        console.log("It's today! (ifReminderIsToday)");
+                        resolve(true);
+                    };
+
+                // Weekly - check if the day reminder was set === today's day and then check the time
+                case "Weekly":
+                    if (reminderWasSetDay === dayOfWeek) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Monthly - check if the date reminder was set === today's day and then check the time
+                case "Monthly":
+                    if (reminderWasSetDate === todaysDateDate) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Weekends - check if today is a weekend and then check the time
+                case "Weekends":
+                    if (dayOfWeek === 6 || dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Weekdays - check if today is a week day and then check the time
+                case "Weekdays":
+                    if (dayOfWeek > 0 && dayOfWeek < 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays"
+                case "Mondays":
+                    if (dayOfWeek === 1) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Tuesdays"
+                case "Tuesdays":
+                    if (dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Wednesdays"
+                case "Wednesdays":
+                    if (dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Thursdays"
+                case "Thursdays":
+                    if (dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Fridays"
+                case "Fridays":
+                    if (dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Saturdays"
+                case "Saturdays":
+                    if (dayOfWeek === 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Sundays"
+                case "Sundays":
+                    if (dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays"
+                case "Mondays, Tuesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Wednesdays"
+                case "Mondays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Fridays"
+                case "Mondays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Tuesdays, Thursdays"
+                case "Mondays, Thursdays":
+                    if (dayOfWeek === 2 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Wednesdays, Fridays"
+                case "Wednesdays, Fridays":
+                    if (dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays"
+                case "Mondays, Tuesdays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays, Thursdays"
+                case "Mondays, Tuesdays, Wednesdays, Thursdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Wednesdays, Fridays"
+                case "Mondays, Wednesdays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+            }
         }
-
-        // If it's a recurrent reminder
-    } else {
-        switch(reminderRecurrence) {
-            // Daily - check if reminder's time hasn't passed today
-            case "Daily":
-                return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-
-            // Weekly - check if the day reminder was set === today's day and then check the time
-            case "Weekly":
-                if (reminderWasSetDay === dayOfWeek) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Monthly - check if the date reminder was set === today's day and then check the time
-            case "Monthly":
-                if (reminderWasSetDate === todaysDateDate) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Weekends - check if today is a weekend and then check the time
-            case "Weekends":
-                if (dayOfWeek === 6 || dayOfWeek === 0) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Weekdays - check if today is a week day and then check the time
-            case "Weekdays":
-                if (dayOfWeek > 0 && dayOfWeek < 6) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays"
-            case "Mondays":
-                if (dayOfWeek === 1) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Tuesdays"
-            case "Tuesdays":
-                if (dayOfWeek === 2) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Wednesdays"
-            case "Wednesdays":
-                if (dayOfWeek === 3) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Thursdays"
-            case "Thursdays":
-                if (dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Fridays"
-            case "Fridays":
-                if (dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Saturdays"
-            case "Saturdays":
-                if (dayOfWeek === 6) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Sundays"
-            case "Sundays":
-                if (dayOfWeek === 0) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays"
-            case "Mondays, Tuesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Wednesdays"
-            case "Mondays, Wednesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 3) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Fridays"
-            case "Mondays, Fridays":
-                if (dayOfWeek === 1 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Tuesdays, Thursdays"
-            case "Mondays, Thursdays":
-                if (dayOfWeek === 2 || dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Wednesdays, Fridays"
-            case "Wednesdays, Fridays":
-                if (dayOfWeek === 3 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays, Wednesdays"
-            case "Mondays, Tuesdays, Wednesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
-                    return(reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays, Wednesdays, Thursdays"
-            case "Mondays, Tuesdays, Wednesdays, Thursdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Wednesdays, Fridays"
-            case "Mondays, Wednesdays, Fridays":
-                if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-        }
-    }
-
+    });
 }
 
 
 /*
     Retrieves and returns a list of reminders for today for a given user
-
-    Get reminder's parameters reminderTime, ifRepeated (>> reminderDate or reminderRecurrence), snoozedToTime
-    Check if today's time parameters === reminder's time parameters
 
 */
 function showAllReminders4Today(user) {
@@ -715,7 +787,7 @@ function compareReminders(a, b) {
 function snoozeReminder(user, reminderDocID, snoozeForMin) {
     const MongoClient = require("mongodb").MongoClient;
     const url = mongoURL;
-    const myQuery = {"_id": reminderDocID};
+    const myQuery = {"_id": generateID(reminderDocID)};
 
     MongoClient.connect(url, function(err, db) {
         if (err) throw err;
@@ -734,7 +806,7 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
                 }
 
                 // Transform snoozeForMin into ms
-                const snoozeForMS = snoozeForMin + 900000;
+                const snoozeForMS = snoozeForMin + snoozeForMin * 60 * 1000;
 
                 // Transform reminderTime to ms
                 const reminderTimeHours = reminderTime.split(":")[0];
@@ -767,6 +839,65 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
     });
 }
 
+
+/*
+    Reminder confirmation means that the field reminderConfirmed gets todays' date timestamp (e.g. 2018-05-25)
+    and snoozedToTime field is set to null
+*/
+function confirmReminder(user, reminderDocID){
+    //return new Promise((resolve, reject) => {
+    console.log();
+    console.log(`Confirming reminder ${reminderDocID} for user ${user}`);
+    const MongoClient = require("mongodb").MongoClient;
+    const url = mongoURL;
+
+
+    const today = new Date();
+    const todaysYear = today.getFullYear();
+    const todaysMonth = today.getMonth()+1;
+    const todaysDate = today.getDate();
+    const todaysDateStr = `${todaysYear}-${todaysMonth}-${todaysDate}`;
+
+    const myQuery = {"_id": generateID(reminderDocID)};
+    MongoClient.connect(url, function(err, db) {
+        if (err) throw err;
+        const dbo = db.db(dbName);
+
+        dbo.collection(user).findOne(myQuery, function(err, res) {
+            if (err) throw err;
+            if (res) {
+                console.log("Here");
+                // Update value in DB
+                //const updates = {
+                //    $set: {
+                //        snoozedToTime: null,
+                //        reminderConfirmed: todaysDateStr
+                //   }
+                //};
+
+                dbo.collection(user).updateOne({"_id": reminderDocID}, {$set: {"reminderConfirmed": todaysDateStr, "snoozedToTime": null}}, function(err, res) {
+                    if (err) throw err;
+                    if (res) {
+                        console.log(`Reminder was confirmed`);
+                        return true;
+                    }
+                    db.close();
+                });
+            } else {
+                // No document with reminderNumber found
+                console.log("Reminder not found");
+                db.close();
+                return false;
+            }
+        });
+    });
+    //});
+}
+
+/*let result1 = confirmReminder('1695886667133777', '5b081225b2181f18d1c724ef');
+result1.then(flag => {
+    console.log("Result: " + flag);
+})*/
 
 /*
     Generates ObjectID from a proper hex string
@@ -841,6 +972,28 @@ let buttonsAddReminder = {
     }
 };
 
+const buttonsShowRemindersAddReminder = {
+    attachment:{
+        type:"template",
+        payload:{
+            text: "What should I do next?",
+            template_type:"button",
+            buttons:[
+                {
+                    type:"postback",
+                    title:"Today's reminders",
+                    payload:"show my reminders"
+                },
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                }
+            ]
+        }
+    }
+};
+
 // #########################  Button templates END  ###############################
 
 
@@ -902,7 +1055,7 @@ module.exports = (event) => {
                 AllReminders4Today = showAllReminders4Today(senderId);
                 AllReminders4Today.then(function(data) {
                     if (data.length>0) {
-                        speech += `Here's what we have till the end of the day:\n`;
+                        speech += `Here's what we have for today:\n`;
                         for (let i=0; i<data.length; i++) {
                             if (i>0) { speech += "\n\n"; }
                             speech += `\nReminder # ${i+1}`;
@@ -961,8 +1114,8 @@ module.exports = (event) => {
                             }
                             speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
 
-                            // Button template - buttons "Add/Remove one/Clear all"
-                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+                            // Button template - buttons "ShowReminders/AddReminder"
+                            buttonTemplate = buttonsShowRemindersAddReminder;
                         } else {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
                             // Button template - 1 button "Add reminder"
@@ -1125,6 +1278,46 @@ module.exports = (event) => {
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
                     sendMessage(senderId, {text: speech});
+                }
+                break;
+
+            // Confirming reminder
+            case "alert.confirm":
+                let whichID = dfResponse.result.parameters.reminderName;
+                console.log();
+                console.log("Confirming reminder #" + whichID);
+                if (whichID) {
+                    let reminderConfirmationFlag = confirmReminder(senderId, whichID);
+                    //reminderConfirmationFlag.then(result => {
+                        if (reminderConfirmationFlag) {
+                            sendMessage(senderId, {text: "Reminder confirmed!"});
+                        } else {
+                            sendMessage(senderId, {text: "Unfortunately I failed to confirm this reminder. Sorry"});
+                        }
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsShowRemindersAddReminder;
+                        sendMessage(senderId, buttonTemplate);
+                    //})
+                }
+                break;
+
+            // Snoozing reminder
+            case "alert.snooze":
+                let remID = dfResponse.result.parameters.reminderName;
+                console.log();
+                console.log("Snoozing reminder #" + remID);
+                if (remID) {
+                    let reminderSnoozingFlag = snoozeReminder(senderId, remID, snoozeForMin);
+                    //reminderSnoozingFlag.then(result => {
+                        if (reminderSnoozingFlag) {
+                            sendMessage(senderId, {text: `Reminder snoozed for ${snoozeForMin} minuets!`});
+                        } else {
+                            sendMessage(senderId, {text: "Unfortunately I failed to delay this reminder. Sorry"});
+                        }
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsShowRemindersAddReminder;
+                        sendMessage(senderId, buttonTemplate);
+                    //})
                 }
                 break;
 
