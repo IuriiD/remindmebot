@@ -29,6 +29,12 @@ module.exports = {
             const currTime = new Date();
             currTime.setHours(currTime.getHours() + 3); // to change from UTC/GMT to GMT+3
             const currTimeMS = currTime.getTime();
+            console.log("+++++++++++++++");
+            console.log("currTimeMS : " + currTimeMS);
+            const anotherD = new Date(currTimeMS);
+            const anotherH = anotherD.getHours();
+            const anotherM = anotherD.getMinutes();
+            console.log(`Curr time: ${anotherH}:${anotherM}`);
 
             const MongoClient = require("mongodb").MongoClient;
             const url = mongoURL;
@@ -68,7 +74,7 @@ module.exports = {
                                         let reminderWasSet = reminderID.getTimestamp();
                                         let reminderDate = remindersArr[x]["reminderDate"];
                                         let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
-                                        let snoozedToTime = remindersArr[x]["snoozeToTime"];
+                                        let snoozedToTime = remindersArr[x]["snoozedToTime"];
                                         if (snoozedToTime) {
                                             reminderTime = snoozedToTime;
                                         }
@@ -134,7 +140,10 @@ module.exports = {
                                                         }
                                                     };
                                                     //sendMessage(userID, {text: speech});
-                                                    sendMessage(userID, buttonsConfirmSnooze);
+                                                    let newMessage = sendMessage(userID, buttonsConfirmSnooze);
+                                                    newMessage.then(() => {
+                                                       console.log("Alert");
+                                                    });
 
                                                     allReminderToAlert.push(
                                                         {

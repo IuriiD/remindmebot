@@ -341,136 +341,6 @@ function allUsersRemindersFromDB(userID) {
 }
 
 /*
-    Returns an array of reminder that should be executed at this minute
-*/
-function remindersToAlert() {
-    return new Promise((resolve, reject) => {
-        console.log();
-        console.log('************ remindersToAlert ************');
-        let userID = "";
-        let reminderTimeMS = null;
-        let reminderConfirmed = null;
-        let todaysDateStr = null;
-        let allReminderToAlert = [];
-
-        const currTime = new Date();
-        currTime.setHours(currTime.getHours()+3); // to change from UTC/GMT to GMT+3
-        const currTimeMS = currTime.getTime();
-
-        const MongoClient = require("mongodb").MongoClient;
-        const url = mongoURL;
-
-        MongoClient.connect(url, function (err, db) {
-            if (err) reject(false);
-            const dbo = db.db(dbName);
-
-            // For every collection in DB
-            dbo.listCollections().toArray(function(err, collArray) {
-                if (err) reject(false);
-
-                console.log();
-                console.log('Collestions: ' + JSON.stringify(collArray));
-                if (collArray && collArray.length>0) {
-                    // Get a list of reminders and a collection name (=sender ID)
-                    for (let i=0; i<collArray.length; i++) {
-                        userID = collArray[i]["name"];
-
-                        console.log();
-                        console.log('Working with collection ' + userID);
-
-                        // 'Outer' promise chain - get all reminders for given user, then log selected
-                        allUsersRemindersFromDB(userID).then(remindersArr => {
-
-                            console.log();
-                            console.log('Reminders: ' + JSON.stringify(remindersArr));
-
-                            let chain = Promise.resolve();
-                            for (let x=0; x<remindersArr.length; x++) {
-
-                                chain = chain.then(() => {
-                                    reminderConfirmed = remindersArr[x]["reminderConfirmed"];
-                                    let reminderID = remindersArr[x]["_id"];
-                                    let reminderTime = remindersArr[x]["reminderTime"];
-                                    let reminderWasSet = reminderID.getTimestamp();
-                                    let reminderDate = remindersArr[x]["reminderDate"];
-                                    let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
-                                    let snoozedToTime = remindersArr[x]["snoozeToTime"];
-                                    if (snoozedToTime) {
-                                        reminderTime = snoozedToTime;
-                                    }
-
-                                    let reminderHours = Number(reminderTime.split(":")[0]);
-                                    let reminderMinutes = Number(reminderTime.split(":")[1]);
-                                    let remTime = new Date();
-                                    remTime.setHours(reminderHours, reminderMinutes, 0, 0);
-                                    reminderTimeMS = remTime.getTime();
-
-                                    const todaysDateY = currTime.getFullYear();
-                                    const todaysDateM = currTime.getMonth()+1;
-                                    const todaysDateD = currTime.getDate();
-                                    todaysDateStr = `${todaysDateY}-${todaysDateM}-${todaysDateD}`;
-
-                                    console.log();
-                                    console.log('Reminder #' + reminderID);
-
-                                    return ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime)
-
-                                    .then(ifToday => {
-                                        console.log("--------------------");
-                                        console.log("ifToday: " + ifToday);
-                                        console.log("reminderTimeMS: " + reminderTimeMS);
-                                        console.log("currTimeMS: " + currTimeMS);
-                                        if (reminderTimeMS<currTimeMS) {
-                                            console.log("reminderTimeMS<currTimeMS: true");
-                                        } else {
-                                            console.log("reminderTimeMS<currTimeMS: false");
-                                        }
-                                        console.log("reminderConfirmed: " + reminderConfirmed);
-                                        console.log("todaysDateStr: " + todaysDateStr);
-                                        if (reminderConfirmed!=todaysDateStr) {
-                                            console.log("reminderConfirmed!=todaysDateStr: true");
-                                        } else {
-                                            console.log("reminderConfirmed!=todaysDateStr: false");
-                                        }
-                                        console.log("--------------------");
-
-                                        if (ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr) {
-                                            console.log("(ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr): true");
-                                            sendMessage(userID, {text: "Hello"});
-                                            allReminderToAlert.push(
-                                                {
-                                                    "userID": userID,
-                                                    "_id": reminderID
-                                                }
-                                            );
-                                            console.log('allReminderToAlert: ' + JSON.stringify(allReminderToAlert));
-                                        } else {
-                                            console.log("(ifToday && reminderTimeMS<currTimeMS && reminderConfirmed!=todaysDateStr): false");
-                                        }
-                                    })
-                                })
-                            }
-                            return allReminderToAlert;
-                        })
-                            .then(data => {
-                                resolve(data);
-                            })
-                            .catch((err) => {
-                                console.log("Error happened: " + err);
-                            })
-                    }
-
-                } else {
-                    resolve(false);
-                }
-            });
-
-        });
-    });
-}
-
-
-/*
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
 function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
@@ -780,61 +650,53 @@ function compareReminders(a, b) {
     return comparison;
 }
 
+let today = new Date();
+const todaysHours = today.getHours()+3;
+const todaysMinutes = today.getMinutes();
+console.log(`Current time: ${todaysHours}:${todaysMinutes}`);
 
 /*
-    "Snoozes" (postpones) reminder with id reminderDocID for a given user for snoozeForMin minutes
+    "Snoozes" (postpones) reminder with id reminderDocID for a given user for snoozeForMin minutes from current time
 */
 function snoozeReminder(user, reminderDocID, snoozeForMin) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
-    const myQuery = {"_id": generateID(reminderDocID)};
+    // Get current time, correct hours from GMT to GTM+3 (Kiev), set hour, get time in ms, add snoozeForMin, convert
+    // back to "hh:mm"
+    return new Promise((resolve, reject) => {
+        let today = new Date();
+        const todaysHours = today.getHours() + 3;
+        const todaysMinutes = today.getMinutes();
+        console.log(`Current time: ${todaysHours}:${todaysMinutes}`);
 
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
-        dbo.collection(user).findOne(myQuery, function(err, result) {
+        today.setHours(todaysHours, todaysMinutes, 0, 0);
+        let snoozedToTimeMS = today.getTime() + snoozeForMin * 60 * 1000;
+
+        const snoozedDate = new Date(snoozedToTimeMS);
+        const snoozedHours = snoozedDate.getHours();
+        const snoozedMinutes = snoozedDate.getMinutes();
+        const snoozedToTime = `${snoozedHours}:${snoozedMinutes}`;
+        console.log("snoozedToTime: " + snoozedToTime);
+
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+        const ObjectId = require('mongodb').ObjectID;
+//
+        MongoClient.connect(url, function (err, db) {
             if (err) throw err;
-            if (result) {
-                // Reminder might be already snoozed
-                let snoozedToTime;
-                snoozedToTime = result["snoozedToTime"];
-                let reminderTime;
-                if (!snoozedToTime) {
-                    reminderTime = result["reminderTime"];
-                } else {
-                    reminderTime = snoozedToTime;
-                }
+            const dbo = db.db(dbName);
 
-                // Transform snoozeForMin into ms
-                const snoozeForMS = snoozeForMin + snoozeForMin * 60 * 1000;
-
-                // Transform reminderTime to ms
-                const reminderTimeHours = reminderTime.split(":")[0];
-                const reminderTimeMinutes = reminderTime.split(":")[1];
-                const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
-
-                // Next alert
-                const snoozedTillMS = reminderTimeMS + snoozeForMS;
-
-                // Back from ms to hh:mm
-                const snoozedTillHelper = new Date(snoozedTillMS);
-                const snoozedTillHours = snoozedTillHelper.getHours();
-                const snoozedTillMinutes = snoozedTillHelper.getMinutes();
-                const snoozedTill = `${snoozedTillHours}:${snoozedTillMinutes}`;
-
-                // Update value in DB
-                const newValues =  {$set: {snoozedToTime: snoozedTill}};
-                dbo.collection(user).updateOne(myQuery, newValues, function(err, res) {
-                    if (err) throw err;
-                    console.log(`Document with id ${reminderDocID} was updated`);
+            console.log("reminderDocID: " + reminderDocID);
+            dbo.collection(user).updateOne({"_id": new ObjectId(reminderDocID)}, {$set: {"snoozedToTime": snoozedToTime}}, function (err, res) {
+                if (err) {
+                    console.log(err);
                     db.close();
-                });
-            } else {
-                // No document with reminderNumber found
-                console.log("Reminder not found");
-                db.close();
-                return false;
-            }
+                    throw err;
+                }
+                if (res) {
+                    console.log(`Reminder ${reminderDocID} was snoozed`);
+                    resolve(true);
+                    db.close();
+                }
+            });
         });
     });
 }
@@ -845,66 +707,60 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
     and snoozedToTime field is set to null
 */
 function confirmReminder(user, reminderDocID){
-    //return new Promise((resolve, reject) => {
-    console.log();
-    console.log(`Confirming reminder ${reminderDocID} for user ${user}`);
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
+    return new Promise((resolve, reject) => {
+        console.log();
+        console.log(`Confirming reminder ${reminderDocID} for user ${user}`);
+        const MongoClient = require("mongodb").MongoClient;
+        const ObjectId = require('mongodb').ObjectID;
+        const url = mongoURL;
 
 
-    const today = new Date();
-    const todaysYear = today.getFullYear();
-    const todaysMonth = today.getMonth()+1;
-    const todaysDate = today.getDate();
-    const todaysDateStr = `${todaysYear}-${todaysMonth}-${todaysDate}`;
+        const today = new Date();
+        const todaysYear = today.getFullYear();
+        const todaysMonth = today.getMonth()+1;
+        const todaysDate = today.getDate();
+        const todaysDateStr = `${todaysYear}-${todaysMonth}-${todaysDate}`;
 
-    const myQuery = {"_id": generateID(reminderDocID)};
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
-
-        dbo.collection(user).findOne(myQuery, function(err, res) {
+        const myQuery = {"_id": new ObjectId(reminderDocID)};
+        MongoClient.connect(url, function(err, db) {
             if (err) throw err;
-            if (res) {
-                console.log("Here");
-                // Update value in DB
-                //const updates = {
-                //    $set: {
-                //        snoozedToTime: null,
-                //        reminderConfirmed: todaysDateStr
-                //   }
-                //};
+            const dbo = db.db(dbName);
 
-                dbo.collection(user).updateOne({"_id": reminderDocID}, {$set: {"reminderConfirmed": todaysDateStr, "snoozedToTime": null}}, function(err, res) {
-                    if (err) throw err;
-                    if (res) {
-                        console.log(`Reminder was confirmed`);
-                        return true;
-                    }
+            dbo.collection(user).findOne(myQuery, function(err, res) {
+                if (err) throw err;
+                if (res) {
+                    console.log("Here");
+                    dbo.collection(user).updateOne(myQuery, {$set: {"reminderConfirmed": todaysDateStr, "snoozedToTime": null}}, function(err, res) {
+                        if (err) {
+                            throw err;
+                            db.close();
+                        }
+                        if (res) {
+                            console.log(`Reminder was confirmed`);
+                            db.close();
+                            resolve(true);
+                        }
+
+                    });
+                } else {
+                    // No document with reminderNumber found
+                    console.log("Reminder not found");
                     db.close();
-                });
-            } else {
-                // No document with reminderNumber found
-                console.log("Reminder not found");
-                db.close();
-                return false;
-            }
+                    resolve(false);
+                }
+            });
         });
     });
-    //});
 }
+//confirmReminder('1695886667133777', '5b082300e4e2e41c82a25d41');
 
-/*let result1 = confirmReminder('1695886667133777', '5b081225b2181f18d1c724ef');
-result1.then(flag => {
-    console.log("Result: " + flag);
-})*/
 
 /*
     Generates ObjectID from a proper hex string
 */
 function generateID(hexString) {
     const ObjectID = require("mongodb").ObjectID;
-    return ObjectID;
+    return new ObjectID(hexString);
 }
 
 /*
@@ -1063,21 +919,26 @@ module.exports = (event) => {
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
 
-                        // Button template - buttons "Add/Remove one/Clear all"
-                        buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+                        const firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
+                            sendMessage(senderId, buttonTemplate);
+                        })
 
                     } else {
                         speech = "Sorry but you have no reminders for today yet";
 
-                        // Button template - 1 button "Add reminder"
-                        buttonTemplate = buttonsAddReminder;
+                        const firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            // Button template - 1 button "Add reminder"
+                            buttonTemplate = buttonsAddReminder;
 
+                            sendMessage(senderId, buttonTemplate);
+                        })
                     }
 
-                const firstMessage = sendMessage(senderId, {text: speech});
-                firstMessage.then(result => {
-                    sendMessage(senderId, buttonTemplate);
-                })
                 });
                 break;
 
@@ -1114,18 +975,23 @@ module.exports = (event) => {
                             }
                             speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
 
-                            // Button template - buttons "ShowReminders/AddReminder"
-                            buttonTemplate = buttonsShowRemindersAddReminder;
-                        } else {
-                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
-                            // Button template - 1 button "Add reminder"
-                            buttonTemplate = buttonsAddReminder;
-                        }
+                            const firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                // Button template - buttons "ShowReminders/AddReminder"
+                                buttonTemplate = buttonsShowRemindersAddReminder;
 
-                        const firstMessage = sendMessage(senderId, {text: speech});
-                        firstMessage.then(result => {
-                            sendMessage(senderId, buttonTemplate);
-                        })
+                                sendMessage(senderId, buttonTemplate);
+                            })
+                        } else {
+                            const firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                // Button template - 1 button "Add reminder"
+                                buttonTemplate = buttonsAddReminder;
+
+                                sendMessage(senderId, buttonTemplate);
+                            })
+
+                        }
                     })
                         .catch(err => {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
@@ -1288,8 +1154,9 @@ module.exports = (event) => {
                 console.log("Confirming reminder #" + whichID);
                 if (whichID) {
                     let reminderConfirmationFlag = confirmReminder(senderId, whichID);
-                    //reminderConfirmationFlag.then(result => {
-                        if (reminderConfirmationFlag) {
+                    reminderConfirmationFlag.then(result => {
+                    console.log("reminderConfirmationFlag: " + result);
+                        if (result) {
                             sendMessage(senderId, {text: "Reminder confirmed!"});
                         } else {
                             sendMessage(senderId, {text: "Unfortunately I failed to confirm this reminder. Sorry"});
@@ -1297,7 +1164,7 @@ module.exports = (event) => {
                         // Button template - buttons "Add/Remove one/Clear all"
                         buttonTemplate = buttonsShowRemindersAddReminder;
                         sendMessage(senderId, buttonTemplate);
-                    //})
+                    })
                 }
                 break;
 
@@ -1308,16 +1175,16 @@ module.exports = (event) => {
                 console.log("Snoozing reminder #" + remID);
                 if (remID) {
                     let reminderSnoozingFlag = snoozeReminder(senderId, remID, snoozeForMin);
-                    //reminderSnoozingFlag.then(result => {
-                        if (reminderSnoozingFlag) {
-                            sendMessage(senderId, {text: `Reminder snoozed for ${snoozeForMin} minuets!`});
+                    reminderSnoozingFlag.then(result => {
+                        if (result) {
+                            sendMessage(senderId, {text: `Reminder snoozed for ${snoozeForMin} minutes!`});
                         } else {
                             sendMessage(senderId, {text: "Unfortunately I failed to delay this reminder. Sorry"});
                         }
                         // Button template - buttons "Add/Remove one/Clear all"
                         buttonTemplate = buttonsShowRemindersAddReminder;
                         sendMessage(senderId, buttonTemplate);
-                    //})
+                    })
                 }
                 break;
 
