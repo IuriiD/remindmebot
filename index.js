@@ -15,7 +15,7 @@ const functions = require('./functions');
 let checkForAlerts = setInterval(() => {
         console.log("Checking for reminders to alert... (every 20 sec)");
         functions.remindersToAlert();
-    }, 20000
+    }, 60000
 );
 
 app.get('/', verificationController);

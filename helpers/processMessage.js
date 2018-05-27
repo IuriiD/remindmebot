@@ -781,7 +781,7 @@ function sendMessage(senderId, ourMessage) {
     });
 }
 
-// #########################  Button templates  ###################################
+// ###########################  Payload templates   ################################
 
 const buttonsAddRemoveOneClearAllReminders = {
     attachment:{
@@ -811,7 +811,7 @@ const buttonsAddRemoveOneClearAllReminders = {
 };
 
 
-let buttonsAddReminder = {
+const buttonsAddReminder = {
     attachment:{
         type:"template",
             payload:{
@@ -850,7 +850,58 @@ const buttonsShowRemindersAddReminder = {
     }
 };
 
-// #########################  Button templates END  ###############################
+const iDoubleDareYouImgIDs = ["194248304552510", "194248447885829", "194248584552482"];
+let imageIDoubleDareYou1 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248304552510"
+                }
+            ]
+        }
+    }
+};
+
+let imageIDoubleDareYou2 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248447885829"
+                }
+            ]
+        }
+    }
+};
+
+let imageIDoubleDareYou3 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248584552482"
+                }
+            ]
+        }
+    }
+};
+// #########################  Payload templates END  ###############################
+/*let checkForAlerts = setInterval(() => {
+        console.log("ID: " + iDoubleDareYouImgIDs[Math.floor(Math.random() * 3)]);
+    }, 2000
+);*/
+
+
 
 
 module.exports = (event) => {
@@ -919,7 +970,7 @@ module.exports = (event) => {
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
 
-                        const firstMessage = sendMessage(senderId, {text: speech});
+                        let firstMessage = sendMessage(senderId, {text: speech});
                         firstMessage.then(result => {
                             // Button template - buttons "Add/Remove one/Clear all"
                             buttonTemplate = buttonsAddRemoveOneClearAllReminders;
@@ -930,7 +981,7 @@ module.exports = (event) => {
                     } else {
                         speech = "Sorry but you have no reminders for today yet";
 
-                        const firstMessage = sendMessage(senderId, {text: speech});
+                        let firstMessage = sendMessage(senderId, {text: speech});
                         firstMessage.then(result => {
                             // Button template - 1 button "Add reminder"
                             buttonTemplate = buttonsAddReminder;
@@ -975,7 +1026,7 @@ module.exports = (event) => {
                             }
                             speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
 
-                            const firstMessage = sendMessage(senderId, {text: speech});
+                            let firstMessage = sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
                                 // Button template - buttons "ShowReminders/AddReminder"
                                 buttonTemplate = buttonsShowRemindersAddReminder;
@@ -983,7 +1034,7 @@ module.exports = (event) => {
                                 sendMessage(senderId, buttonTemplate);
                             })
                         } else {
-                            const firstMessage = sendMessage(senderId, {text: speech});
+                            let firstMessage = sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
                                 // Button template - 1 button "Add reminder"
                                 buttonTemplate = buttonsAddReminder;
@@ -999,7 +1050,7 @@ module.exports = (event) => {
                             // Button template - 1 button "Add reminder"
                             buttonTemplate = buttonsAddReminder;
 
-                            const firstMessage = sendMessage(senderId, {text: speech});
+                            let firstMessage = sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
                                 sendMessage(senderId, buttonTemplate);
                             })
@@ -1042,7 +1093,7 @@ module.exports = (event) => {
                         } else {
                             speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
                         }
-                        const firstMessage = sendMessage(senderId, {text: speech});
+                        let firstMessage = sendMessage(senderId, {text: speech});
                         firstMessage.then(result => {
                             sendMessage(senderId, buttonTemplate);
                         })
@@ -1051,7 +1102,7 @@ module.exports = (event) => {
                             // Button template - buttons "Add/Remove one/Clear all"
                             buttonTemplate = buttonsAddRemoveOneClearAllReminders;
                             speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
-                            const firstMessage = sendMessage(senderId, {text: speech});
+                            let firstMessage = sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
                                 sendMessage(senderId, buttonTemplate);
                             })
@@ -1067,30 +1118,42 @@ module.exports = (event) => {
 
                     speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
 
-                    const firstMessage = sendMessage(senderId, {text: speech});
+                    let firstMessage = sendMessage(senderId, {text: speech});
                     firstMessage.then(result => {
                         sendMessage(senderId, buttonTemplate);
                     })
 
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
-                    sendMessage(senderId, {text: speech});
+                    let firstMessage = sendMessage(senderId, {text: speech});
+                    firstMessage.then(result => {
+                        let variants = [imageIDoubleDareYou1, imageIDoubleDareYou2, imageIDoubleDareYou3];
+                        sendMessage(senderId, variants[Math.floor(Math.random() * 3)]);
+                    })
                 }
                 break;
 
             // Deleting at specific reminder
             case "remindersget.deletethisreminder":
                 const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
-                if (reminderNumber !== "" && reminderNumber !== 0) {
+                if (reminderNumber !== "" && reminderNumber > 0) {
                     console.log("Reminder to delete: " + reminderNumber);
 
                     showAllReminders4Today(senderId)
                         .then(remindersArray => {
                             console.log("Got a list of todays reminders, N=" + remindersArray.length);
-                            let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
-                            console.log("Reminder to delete has ID " + reminderDocID);
-                            return reminderDocID;
-                            ;
+                            if (reminderNumber<remindersArray.length) {
+                                let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
+                                console.log("Reminder to delete has ID " + reminderDocID);
+                                return reminderDocID;
+                            } else {
+                                console.log("User entered a serial number of reminder which is >remindersArray.length")
+                                speech = `We don't have a reminder #${reminderNumber}.\nPlease try again`;
+                                let firstMessage = sendMessage(senderId, {text: speech});
+                                firstMessage.then(result => {
+                                    return Promise.reject(false);
+                                })
+                            }
                         })
                         .then(reminderDocID => {
                             let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
@@ -1132,7 +1195,7 @@ module.exports = (event) => {
                                 speech = "Sorry but I failed to remove this reminder";
 
                             }
-                            const firstMessage = sendMessage(senderId, {text: speech});
+                            let firstMessage = sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
                                 sendMessage(senderId, buttonTemplate);
                             })
