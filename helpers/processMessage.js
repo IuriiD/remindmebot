@@ -6,7 +6,7 @@
     2) no reminders editing (delete and create a new reminder instead if needed);
 */
 
-const API_AI_TOKEN = process.env.API_AI_TOKEN;
+const API_AI_TOKEN = process.env.DF_TOKEN;
 //'c2a8b983845543e2b0d54018ad01d2d1';
 const apiAiClient = require('apiai')(API_AI_TOKEN);
 
