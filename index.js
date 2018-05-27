@@ -10,13 +10,16 @@ app.listen(5000, function() {console.log('Webhook server is listening, port 5000
 
 const verificationController = require('./controllers/verification');
 const messageWebhookController = require('./controllers/messageWebhook');
-const functions = require('./functions');
+const functions = require('./helpers/functions');
 
-let checkForAlerts = setInterval(() => {
-        console.log("Checking for reminders to alert... (every 20 sec)");
+setInterval(() => {
+        console.log("Checking for reminders to alert... (every 60 sec)");
         functions.remindersToAlert();
     }, 60000
 );
 
 app.get('/', verificationController);
 app.post('/', messageWebhookController);
+
+
+

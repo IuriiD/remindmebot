@@ -145,8 +145,9 @@ function createReminder(user, reminderDescription, reminderTime, reminderDate=nu
                 reminderTime: reminderTime,
                 reminderDate: reminderDate,
                 reminderRecurrence: reminderRecurrence,
-                snoozedToTime: null     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
-                                        // reminderTime + snoozeForMin
+                snoozedToTime: null,     // field reserved for saving time (00:00-23:59) to which reminder was postponed,
+                                         // reminderTime + snoozeForMin
+                reminderConfirmed: null  // all reminders today with reminderTime/snoozedToTime in past have to be confirmed
             };
 
             console.log('myReminder: ' + myReminder);
@@ -314,227 +315,255 @@ function clearAllReminders(user) {
     });
 }
 
+/*
+    Gets all reminders for a given userID
+    Separated in a function due to promisification
+*/
+function allUsersRemindersFromDB(userID) {
+    return new Promise((resolve, reject) => {
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+
+        MongoClient.connect(url, function (err, db) {
+            if (err) reject(false);
+            const dbo = db.db(dbName);
+
+            dbo.collection(userID).find({}).toArray(function (err, remindersArr) {
+                if (err) reject(false);
+                if (remindersArr) {
+                    console.log();
+                    console.log("Hello from allUsersRemindersFromDB()");
+                    resolve(remindersArr);
+                }
+            });
+        });
+    });
+}
 
 /*
     Checks if a reminder with given reminderID for a given user should be alerted today
 */
 function ifReminderIsToday(reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) {
-    // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
-    const today = new Date();
-    const todaysDateYear = today.getFullYear();
-    const todaysDateMonth = today.getMonth()+1; // 0-11 >> 1-12
-    const todaysDateDate = today.getDate();
-    const dayOfWeek = today.getDay(); // 0-6, Sun=0
-    const currentTime = today.getTime(); // ms
+    return new Promise((resolve, reject) => {
+        // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
+        const today = new Date();
+        today.setUTCHours(today.getHours() + 3);
+        const todaysDateYear = today.getFullYear();
+        const todaysDateMonth = today.getMonth() + 1; // 0-11 >> 1-12
+        const todaysDateDate = today.getDate();
+        const dayOfWeek = today.getDay(); // 0-6, Sun=0
+        //const currentTime = today.getTime(); // ms - at first I wanted to display only those todays' reminders that were
+        // in future, that is between currentTime and todayEnds, ms
 
-    const todayBegan = new Date();
-    const todayBeganMS = todayBegan.setHours(0, 0, 0, 0);
-    const todayEnds = todayBeganMS + 86400000-1; // ms in 1 day
+        const todayBeganMS = today.setHours(0, 0, 0, 0);
+        const todayEnds = todayBeganMS + 86400000 - 1; // ms in 1 day
 
-    // Working with reminder's time data
-    if (snoozedToTime) {
-        reminderTime = snoozedToTime;
-    }
+        // Working with reminder's time data
+        if (snoozedToTime) {
+            reminderTime = snoozedToTime;
+        }
 
-    // Parse reminderTime and transform it into ms
-    const reminderTimeHours = reminderTime.split(":")[0];
-    const reminderTimeMinutes = reminderTime.split(":")[1];
-    const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
+        // Parse reminderTime and transform it into ms
+        const reminderTimeHours = reminderTime.split(":")[0];
+        const reminderTimeMinutes = reminderTime.split(":")[1];
+        const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
 
-    // To get day of the week and date reminder was set (for "Weekly" recurrence cases) we need _id field
-    const reminderWasSetDay = reminderWasSet.getDay();
-    const reminderWasSetDate = reminderWasSet.getDate();
+        // To get day of the week and date reminder was set (for "Weekly" recurrence cases) we need _id field
+        const reminderWasSetDay = reminderWasSet.getDay();
+        const reminderWasSetDate = reminderWasSet.getDate();
 
-    // Parse reminderDate to separate year, month and date
-    let reminderDateYear = "";
-    let reminderDateMonth = "";
-    let reminderDateDay = "";
-    if (reminderDate) {
-        reminderDateYear = reminderDate.split("-")[0];
-        reminderDateMonth = reminderDate.split("-")[1];
-        reminderDateDay = reminderDate.split("-")[2];
-    }
+        // Parse reminderDate to separate year, month and date
+        let reminderDateYear = "";
+        let reminderDateMonth = "";
+        let reminderDateDay = "";
+        if (reminderDate) {
+            reminderDateYear = reminderDate.split("-")[0];
+            reminderDateMonth = reminderDate.split("-")[1];
+            reminderDateDay = reminderDate.split("-")[2];
+        }
 
-// Main check-tree
-    // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
-    if (!reminderRecurrence) {
-        if (reminderDateYear == todaysDateYear &&
-            reminderDateMonth == todaysDateMonth &&
-            reminderDateDay == todaysDateDate) {
-            return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
+        // Main check-tree
+        // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
+        if (!reminderRecurrence) {
+            if (reminderDateYear == todaysDateYear &&
+                reminderDateMonth == todaysDateMonth &&
+                reminderDateDay == todaysDateDate) {
+                console.log("It's today! (ifReminderIsToday)");
+                resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+            } else {
+                console.log("It's NOT today! (ifReminderIsToday)");
+                resolve(false);
+            }
+
+            // If it's a recurrent reminder
         } else {
-            return false;
+            switch (reminderRecurrence) {
+                // Daily - check if reminder's time hasn't passed today
+                case "Daily":
+                    if (reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds) {
+                        console.log("It's today! (ifReminderIsToday)");
+                        resolve(true);
+                    };
+
+                // Weekly - check if the day reminder was set === today's day and then check the time
+                case "Weekly":
+                    if (reminderWasSetDay === dayOfWeek) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Monthly - check if the date reminder was set === today's day and then check the time
+                case "Monthly":
+                    if (reminderWasSetDate === todaysDateDate) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Weekends - check if today is a weekend and then check the time
+                case "Weekends":
+                    if (dayOfWeek === 6 || dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // Weekdays - check if today is a week day and then check the time
+                case "Weekdays":
+                    if (dayOfWeek > 0 && dayOfWeek < 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays"
+                case "Mondays":
+                    if (dayOfWeek === 1) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Tuesdays"
+                case "Tuesdays":
+                    if (dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Wednesdays"
+                case "Wednesdays":
+                    if (dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Thursdays"
+                case "Thursdays":
+                    if (dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Fridays"
+                case "Fridays":
+                    if (dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Saturdays"
+                case "Saturdays":
+                    if (dayOfWeek === 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Sundays"
+                case "Sundays":
+                    if (dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays"
+                case "Mondays, Tuesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Wednesdays"
+                case "Mondays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Fridays"
+                case "Mondays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Tuesdays, Thursdays"
+                case "Mondays, Thursdays":
+                    if (dayOfWeek === 2 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Wednesdays, Fridays"
+                case "Wednesdays, Fridays":
+                    if (dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays"
+                case "Mondays, Tuesdays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays, Thursdays"
+                case "Mondays, Tuesdays, Wednesdays, Thursdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+
+                // "Mondays, Wednesdays, Fridays"
+                case "Mondays, Wednesdays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        resolve(false);
+                    }
+            }
         }
-
-        // If it's a recurrent reminder
-    } else {
-        switch(reminderRecurrence) {
-            // Daily - check if reminder's time hasn't passed today
-            case "Daily":
-                return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-
-            // Weekly - check if the day reminder was set === today's day and then check the time
-            case "Weekly":
-                if (reminderWasSetDay === dayOfWeek) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Monthly - check if the date reminder was set === today's day and then check the time
-            case "Monthly":
-                if (reminderWasSetDate === todaysDateDate) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Weekends - check if today is a weekend and then check the time
-            case "Weekends":
-                if (dayOfWeek === 6 || dayOfWeek === 0) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // Weekdays - check if today is a week day and then check the time
-            case "Weekdays":
-                if (dayOfWeek > 0 && dayOfWeek < 6) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays"
-            case "Mondays":
-                if (dayOfWeek === 1) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Tuesdays"
-            case "Tuesdays":
-                if (dayOfWeek === 2) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Wednesdays"
-            case "Wednesdays":
-                if (dayOfWeek === 3) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Thursdays"
-            case "Thursdays":
-                if (dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Fridays"
-            case "Fridays":
-                if (dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Saturdays"
-            case "Saturdays":
-                if (dayOfWeek === 6) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Sundays"
-            case "Sundays":
-                if (dayOfWeek === 0) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays"
-            case "Mondays, Tuesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Wednesdays"
-            case "Mondays, Wednesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 3) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Fridays"
-            case "Mondays, Fridays":
-                if (dayOfWeek === 1 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Tuesdays, Thursdays"
-            case "Mondays, Thursdays":
-                if (dayOfWeek === 2 || dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Wednesdays, Fridays"
-            case "Wednesdays, Fridays":
-                if (dayOfWeek === 3 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays, Wednesdays"
-            case "Mondays, Tuesdays, Wednesdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
-                    return(reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Tuesdays, Wednesdays, Thursdays"
-            case "Mondays, Tuesdays, Wednesdays, Thursdays":
-                if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-
-            // "Mondays, Wednesdays, Fridays"
-            case "Mondays, Wednesdays, Fridays":
-                if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
-                    return (reminderTimeMS>currentTime && reminderTimeMS<todayEnds);
-                } else {
-                    return false;
-                }
-        }
-    }
-
+    });
 }
 
 
 /*
     Retrieves and returns a list of reminders for today for a given user
-
-    Get reminder's parameters reminderTime, ifRepeated (>> reminderDate or reminderRecurrence), snoozedToTime
-    Check if today's time parameters === reminder's time parameters
 
 */
 function showAllReminders4Today(user) {
@@ -621,64 +650,109 @@ function compareReminders(a, b) {
     return comparison;
 }
 
+let today = new Date();
+const todaysHours = today.getHours()+3;
+const todaysMinutes = today.getMinutes();
+console.log(`Current time: ${todaysHours}:${todaysMinutes}`);
 
 /*
-    "Snoozes" (postpones) reminder with id reminderDocID for a given user for snoozeForMin minutes
+    "Snoozes" (postpones) reminder with id reminderDocID for a given user for snoozeForMin minutes from current time
 */
 function snoozeReminder(user, reminderDocID, snoozeForMin) {
-    const MongoClient = require("mongodb").MongoClient;
-    const url = mongoURL;
-    const myQuery = {"_id": reminderDocID};
+    // Get current time, correct hours from GMT to GTM+3 (Kiev), set hour, get time in ms, add snoozeForMin, convert
+    // back to "hh:mm"
+    return new Promise((resolve, reject) => {
+        let today = new Date();
+        const todaysHours = today.getHours() + 3;
+        const todaysMinutes = today.getMinutes();
+        console.log(`Current time: ${todaysHours}:${todaysMinutes}`);
 
-    MongoClient.connect(url, function(err, db) {
-        if (err) throw err;
-        const dbo = db.db(dbName);
-        dbo.collection(user).findOne(myQuery, function(err, result) {
+        today.setHours(todaysHours, todaysMinutes, 0, 0);
+        let snoozedToTimeMS = today.getTime() + snoozeForMin * 60 * 1000;
+
+        const snoozedDate = new Date(snoozedToTimeMS);
+        const snoozedHours = snoozedDate.getHours();
+        const snoozedMinutes = snoozedDate.getMinutes();
+        const snoozedToTime = `${snoozedHours}:${snoozedMinutes}`;
+        console.log("snoozedToTime: " + snoozedToTime);
+
+        const MongoClient = require("mongodb").MongoClient;
+        const url = mongoURL;
+        const ObjectId = require('mongodb').ObjectID;
+//
+        MongoClient.connect(url, function (err, db) {
             if (err) throw err;
-            if (result) {
-                // Reminder might be already snoozed
-                let snoozedToTime;
-                snoozedToTime = result["snoozedToTime"];
-                let reminderTime;
-                if (!snoozedToTime) {
-                    reminderTime = result["reminderTime"];
-                } else {
-                    reminderTime = snoozedToTime;
-                }
+            const dbo = db.db(dbName);
 
-                // Transform snoozeForMin into ms
-                const snoozeForMS = snoozeForMin + 900000;
-
-                // Transform reminderTime to ms
-                const reminderTimeHours = reminderTime.split(":")[0];
-                const reminderTimeMinutes = reminderTime.split(":")[1];
-                const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
-
-                // Next alert
-                const snoozedTillMS = reminderTimeMS + snoozeForMS;
-
-                // Back from ms to hh:mm
-                const snoozedTillHelper = new Date(snoozedTillMS);
-                const snoozedTillHours = snoozedTillHelper.getHours();
-                const snoozedTillMinutes = snoozedTillHelper.getMinutes();
-                const snoozedTill = `${snoozedTillHours}:${snoozedTillMinutes}`;
-
-                // Update value in DB
-                const newValues =  {$set: {snoozedToTime: snoozedTill}};
-                dbo.collection(user).updateOne(myQuery, newValues, function(err, res) {
-                    if (err) throw err;
-                    console.log(`Document with id ${reminderDocID} was updated`);
+            console.log("reminderDocID: " + reminderDocID);
+            dbo.collection(user).updateOne({"_id": new ObjectId(reminderDocID)}, {$set: {"snoozedToTime": snoozedToTime}}, function (err, res) {
+                if (err) {
+                    console.log(err);
                     db.close();
-                });
-            } else {
-                // No document with reminderNumber found
-                console.log("Reminder not found");
-                db.close();
-                return false;
-            }
+                    throw err;
+                }
+                if (res) {
+                    console.log(`Reminder ${reminderDocID} was snoozed`);
+                    resolve(true);
+                    db.close();
+                }
+            });
         });
     });
 }
+
+
+/*
+    Reminder confirmation means that the field reminderConfirmed gets todays' date timestamp (e.g. 2018-05-25)
+    and snoozedToTime field is set to null
+*/
+function confirmReminder(user, reminderDocID){
+    return new Promise((resolve, reject) => {
+        console.log();
+        console.log(`Confirming reminder ${reminderDocID} for user ${user}`);
+        const MongoClient = require("mongodb").MongoClient;
+        const ObjectId = require('mongodb').ObjectID;
+        const url = mongoURL;
+
+
+        const today = new Date();
+        const todaysYear = today.getFullYear();
+        const todaysMonth = today.getMonth()+1;
+        const todaysDate = today.getDate();
+        const todaysDateStr = `${todaysYear}-${todaysMonth}-${todaysDate}`;
+
+        const myQuery = {"_id": new ObjectId(reminderDocID)};
+        MongoClient.connect(url, function(err, db) {
+            if (err) throw err;
+            const dbo = db.db(dbName);
+
+            dbo.collection(user).findOne(myQuery, function(err, res) {
+                if (err) throw err;
+                if (res) {
+                    console.log("Here");
+                    dbo.collection(user).updateOne(myQuery, {$set: {"reminderConfirmed": todaysDateStr, "snoozedToTime": null}}, function(err, res) {
+                        if (err) {
+                            throw err;
+                            db.close();
+                        }
+                        if (res) {
+                            console.log(`Reminder was confirmed`);
+                            db.close();
+                            resolve(true);
+                        }
+
+                    });
+                } else {
+                    // No document with reminderNumber found
+                    console.log("Reminder not found");
+                    db.close();
+                    resolve(false);
+                }
+            });
+        });
+    });
+}
+//confirmReminder('1695886667133777', '5b082300e4e2e41c82a25d41');
 
 
 /*
@@ -686,29 +760,155 @@ function snoozeReminder(user, reminderDocID, snoozeForMin) {
 */
 function generateID(hexString) {
     const ObjectID = require("mongodb").ObjectID;
-    return ObjectID;
+    return new ObjectID(hexString);
 }
 
 /*
-    Sends a text message to FB Messenger
+    Sends a message to FB Messenger
 */
-function sendTextMessage(senderId, text) {
-    request({
-        url: 'https://graph.facebook.com/v2.6/me/messages',
-        qs: { access_token: FACEBOOK_ACCESS_TOKEN },
-        method: 'POST',
-        json: {
-            recipient: { id: senderId },
-            message: { text },
-        }
+function sendMessage(senderId, ourMessage) {
+    return new Promise((resolve, reject) => {
+        request({
+            url: 'https://graph.facebook.com/v2.6/me/messages',
+            qs: {access_token: FACEBOOK_ACCESS_TOKEN},
+            method: 'POST',
+            json: {
+                recipient: {id: senderId},
+                message: ourMessage,
+            }
+        });
+        resolve(true);
     });
+}
+
+// ###########################  Payload templates   ################################
+
+const buttonsAddRemoveOneClearAllReminders = {
+    attachment:{
+        type:"template",
+        payload:{
+            text: "What should I do next?",
+            template_type:"button",
+            buttons:[
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                },
+                {
+                    type:"postback",
+                    title:"Delete a reminder",
+                    payload:"remove this reminder"
+                },
+                {
+                    type:"postback",
+                    title:"Clear all",
+                    payload:"delete all reminders"
+                }
+            ]
+        }
+    }
 };
+
+
+const buttonsAddReminder = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"button",
+            text: "What should I do next?",
+            buttons:[
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                }
+            ]
+        }
+    }
+};
+
+const buttonsShowRemindersAddReminder = {
+    attachment:{
+        type:"template",
+        payload:{
+            text: "What should I do next?",
+            template_type:"button",
+            buttons:[
+                {
+                    type:"postback",
+                    title:"Today's reminders",
+                    payload:"show my reminders"
+                },
+                {
+                    type:"postback",
+                    title:"Add reminder",
+                    payload:"remind me"
+                }
+            ]
+        }
+    }
+};
+
+const iDoubleDareYouImgIDs = ["194248304552510", "194248447885829", "194248584552482"];
+let imageIDoubleDareYou1 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248304552510"
+                }
+            ]
+        }
+    }
+};
+
+let imageIDoubleDareYou2 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248447885829"
+                }
+            ]
+        }
+    }
+};
+
+let imageIDoubleDareYou3 = {
+    attachment:{
+        type:"template",
+        payload:{
+            template_type:"media",
+            elements: [
+                {
+                    "media_type": "image",
+                    "attachment_id": "194248584552482"
+                }
+            ]
+        }
+    }
+};
+// #########################  Payload templates END  ###############################
+/*let checkForAlerts = setInterval(() => {
+        console.log("ID: " + iDoubleDareYouImgIDs[Math.floor(Math.random() * 3)]);
+    }, 2000
+);*/
+
+
 
 
 module.exports = (event) => {
     let senderId = "";
     let message = "";
-    let payload = "";
+    let buttonTemplate = "";
+    let quickButtons = "";
     let speech = "";
 
     if ("message" in event) {
@@ -762,60 +962,34 @@ module.exports = (event) => {
                 AllReminders4Today = showAllReminders4Today(senderId);
                 AllReminders4Today.then(function(data) {
                     if (data.length>0) {
-                        speech += `Here's what we have till the end of the day:\n`;
+                        speech += `Here's what we have for today:\n`;
                         for (let i=0; i<data.length; i++) {
                             if (i>0) { speech += "\n\n"; }
                             speech += `\nReminder # ${i+1}`;
                             speech += `\nTime: ${data[i]["reminderTime"]}`;
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
-                        payload = {
-                            attachment:{
-                                type:"template",
-                                payload:{
-                                    template_type:"button",
-                                    text:speech,
-                                    buttons:[
-                                        {
-                                            type:"postback",
-                                            url:"Add reminder",
-                                            title:"remind me"
-                                        },
-                                        {
-                                            type:"postback",
-                                            url:"Delete a reminder",
-                                            title:"remove this reminder"
-                                        },
-                                        {
-                                            type:"postback",
-                                            url:"Clear all",
-                                            title:"delete all reminders"
-                                        }
-                                    ]
-                                }
-                            }
-                        };
+
+                        let firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
+                            sendMessage(senderId, buttonTemplate);
+                        })
 
                     } else {
-                        speech = "Sorry but you have no reminders for today yet"
-                        payload = {
-                            attachment:{
-                                type:"template",
-                                payload:{
-                                    template_type:"button",
-                                    text:speech,
-                                    buttons:[
-                                        {
-                                            type:"postback",
-                                            url:"Add reminder",
-                                            title:"remind me"
-                                        }
-                                    ]
-                                }
-                            }
-                        };
+                        speech = "Sorry but you have no reminders for today yet";
+
+                        let firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            // Button template - 1 button "Add reminder"
+                            buttonTemplate = buttonsAddReminder;
+
+                            sendMessage(senderId, buttonTemplate);
+                        })
                     }
-                    sendTextMessage(senderId, payload);
+
                 });
                 break;
 
@@ -851,20 +1025,41 @@ module.exports = (event) => {
                                 reminderDateWording = `${reminderDate}`;
                             }
                             speech = `A reminder "${reminderDescription}" at ${reminderTime} ${reminderDateWording}${reminderRecurrenceWording} was successfully sheduled!`;
+
+                            let firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                // Button template - buttons "ShowReminders/AddReminder"
+                                buttonTemplate = buttonsShowRemindersAddReminder;
+
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         } else {
-                            speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
+                            let firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                // Button template - 1 button "Add reminder"
+                                buttonTemplate = buttonsAddReminder;
+
+                                sendMessage(senderId, buttonTemplate);
+                            })
+
                         }
-                        sendTextMessage(senderId, speech);
                     })
                         .catch(err => {
                             speech = "Kh... Sorry but I failed to save this reminder. Could you please try once again?";
-                            sendTextMessage(senderId, speech);
+
+                            // Button template - 1 button "Add reminder"
+                            buttonTemplate = buttonsAddReminder;
+
+                            let firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
 
                 } else {
                     // Continue slot-filling
                     speech = dfResponse.result.fulfillment.speech;
-                    sendTextMessage(senderId, speech);
+                    sendMessage(senderId, {text: speech});
                 }
                 break;
 
@@ -874,10 +1069,10 @@ module.exports = (event) => {
                 reminderQuantity.then(remindersArray => {
                     if (remindersArray.length === 0) {
                         speech = "Sorry but our reminders' list is empty, nothing to delete";
-                        sendTextMessage(senderId, speech);
+                        sendMessage(senderId, {text: speech});
                     } else {
                         speech = dfResponse.result.fulfillment.speech;
-                        sendTextMessage(senderId, speech);
+                        sendMessage(senderId, {text: speech});
                     }
                 });
                 break;
@@ -890,16 +1085,27 @@ module.exports = (event) => {
                     console.log('Deleting reminders...');
                     const remindersDeletionFlag = clearAllReminders(senderId);
                     remindersDeletionFlag.then(function(data) {
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                         if (data) {
-                            speech = "All reminders have been successfully erased!";
+                            speech = "All reminders have been successfully erased!\nWhat shall we do next?";
                         } else {
-                            speech = "Unfortunately I failed to delete your reminders.. :(";
+                            speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
                         }
-                        sendTextMessage(senderId, speech);
+                        let firstMessage = sendMessage(senderId, {text: speech});
+                        firstMessage.then(result => {
+                            sendMessage(senderId, buttonTemplate);
+                        })
                     })
                         .catch(err => {
-                            speech = "Unfortunately I failed to delete your reminders.. :(";
-                            sendTextMessage(senderId, speech);
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+                            speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
+                            let firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
                 }
                 break;
@@ -907,27 +1113,47 @@ module.exports = (event) => {
             // Incorrect reminders confirmation is cached by Default Fallback intent
             case "input.unknown":
                 if (contextsList.includes("remove-confirm")) {
+                    // Button template - buttons "Add/Remove one/Clear all"
+                    buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                     speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
-                    sendTextMessage(senderId, speech);
+
+                    let firstMessage = sendMessage(senderId, {text: speech});
+                    firstMessage.then(result => {
+                        sendMessage(senderId, buttonTemplate);
+                    })
+
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
-                    sendTextMessage(senderId, speech);
+                    let firstMessage = sendMessage(senderId, {text: speech});
+                    firstMessage.then(result => {
+                        let variants = [imageIDoubleDareYou1, imageIDoubleDareYou2, imageIDoubleDareYou3];
+                        sendMessage(senderId, variants[Math.floor(Math.random() * 3)]);
+                    })
                 }
                 break;
 
             // Deleting at specific reminder
             case "remindersget.deletethisreminder":
                 const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
-                if (reminderNumber !== "" && reminderNumber !== 0) {
+                if (reminderNumber !== "" && reminderNumber > 0) {
                     console.log("Reminder to delete: " + reminderNumber);
 
                     showAllReminders4Today(senderId)
                         .then(remindersArray => {
                             console.log("Got a list of todays reminders, N=" + remindersArray.length);
-                            let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
-                            console.log("Reminder to delete has ID " + reminderDocID);
-                            return reminderDocID;
-                            ;
+                            if (reminderNumber<remindersArray.length) {
+                                let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
+                                console.log("Reminder to delete has ID " + reminderDocID);
+                                return reminderDocID;
+                            } else {
+                                console.log("User entered a serial number of reminder which is >remindersArray.length")
+                                speech = `We don't have a reminder #${reminderNumber}.\nPlease try again`;
+                                let firstMessage = sendMessage(senderId, {text: speech});
+                                firstMessage.then(result => {
+                                    return Promise.reject(false);
+                                })
+                            }
                         })
                         .then(reminderDocID => {
                             let deleteReminderFlag = deleteReminder(senderId, reminderDocID);
@@ -952,13 +1178,27 @@ module.exports = (event) => {
                                         speech += `\nTime: ${result[i]["reminderTime"]}`;
                                         speech += `\nDescription: ${result[i]["reminderDescription"]}`;
                                     }
+
+                                    // Button template - buttons "Add/Remove one/Clear all"
+                                    buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                                 } else {
+                                    // Button template - 1 button "Add reminder"
+                                    buttonTemplate = buttonsAddReminder;
+
                                     speech = "Done!\nAnd at the moment we don't have any reminders left for today";
                                 }
                             } else {
+                                // Button template - buttons "Add/Remove one/Clear all"
+                                buttonTemplate = buttonsAddRemoveOneClearAllReminders;
+
                                 speech = "Sorry but I failed to remove this reminder";
+
                             }
-                            sendTextMessage(senderId, speech);
+                            let firstMessage = sendMessage(senderId, {text: speech});
+                            firstMessage.then(result => {
+                                sendMessage(senderId, buttonTemplate);
+                            })
                         })
                         .catch( error => {
                                 console.log("Some error in promise chain: " + error);
@@ -966,14 +1206,55 @@ module.exports = (event) => {
                         );
                 } else {
                     speech = dfResponse.result.fulfillment.speech;
-                    sendTextMessage(senderId, speech);
+                    sendMessage(senderId, {text: speech});
+                }
+                break;
+
+            // Confirming reminder
+            case "alert.confirm":
+                let whichID = dfResponse.result.parameters.reminderName;
+                console.log();
+                console.log("Confirming reminder #" + whichID);
+                if (whichID) {
+                    let reminderConfirmationFlag = confirmReminder(senderId, whichID);
+                    reminderConfirmationFlag.then(result => {
+                        console.log("reminderConfirmationFlag: " + result);
+                        if (result) {
+                            sendMessage(senderId, {text: "Reminder confirmed!"});
+                        } else {
+                            sendMessage(senderId, {text: "Unfortunately I failed to confirm this reminder. Sorry"});
+                        }
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsShowRemindersAddReminder;
+                        sendMessage(senderId, buttonTemplate);
+                    })
+                }
+                break;
+
+            // Snoozing reminder
+            case "alert.snooze":
+                let remID = dfResponse.result.parameters.reminderName;
+                console.log();
+                console.log("Snoozing reminder #" + remID);
+                if (remID) {
+                    let reminderSnoozingFlag = snoozeReminder(senderId, remID, snoozeForMin);
+                    reminderSnoozingFlag.then(result => {
+                        if (result) {
+                            sendMessage(senderId, {text: `Reminder snoozed for ${snoozeForMin} minutes!`});
+                        } else {
+                            sendMessage(senderId, {text: "Unfortunately I failed to delay this reminder. Sorry"});
+                        }
+                        // Button template - buttons "Add/Remove one/Clear all"
+                        buttonTemplate = buttonsShowRemindersAddReminder;
+                        sendMessage(senderId, buttonTemplate);
+                    })
                 }
                 break;
 
             // Default response (no key intents triggered) - pass DF's response
             default:
                 speech = dfResponse.result.fulfillment.speech;
-                sendTextMessage(senderId, speech);
+                sendMessage(senderId, {text: speech});
         }
     });
 
