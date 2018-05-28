@@ -127,6 +127,7 @@ const remindersToAlert = () => {
                     // Get a list of reminders and a collection name (=sender ID)
                     for (let i = 0; i < collArray.length; i++) {
                         userID = collArray[i]["name"];
+                        console.log("USER " + userID);
 
                         // 'Outer' promise chain - get all reminders for given user, then log selected
                         allUsersRemindersFromDB(userID).then(remindersArr => {
@@ -173,13 +174,6 @@ const remindersToAlert = () => {
                                                 newMessage.then(() => {
                                                     console.log("Alert");
                                                 });
-
-                                                allReminderToAlert.push(
-                                                    {
-                                                        "userID": userID,
-                                                        "_id": reminderID
-                                                    }
-                                                );
                                             }
                                         })
                                 })
