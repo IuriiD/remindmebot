@@ -1,4 +1,4 @@
-module.exports = (req, res) => {
+/*module.exports = (req, res) => {
  const hubChallenge = req.query['hub.challenge'];
  const hubMode = req.query['hub.mode'];
  const verifyTokenMatches = (req.query['hub.verify_token'] === 'remindmebot');
@@ -9,7 +9,7 @@ module.exports = (req, res) => {
    console.log('Verification failedLOLOLOLOLO LOLOL');
    res.status(403).end();
   }
-};
+};*/
 
 module.exports = (req, res) => {
     const hubChallenge = req.query['hub.challenge'];
