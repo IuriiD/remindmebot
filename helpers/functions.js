@@ -3,7 +3,8 @@
 const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD';
 //
 const request = require('request');
-const mongoURL = "mongodb://127.0.0.1:27017/";
+//const mongoURL = "mongodb://127.0.0.1:27017/";
+const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/remindmebot";
 const dbName = 'remindmebot';
 
 const templates = require('./templates');
