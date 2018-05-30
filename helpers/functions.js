@@ -1,9 +1,9 @@
 'use strict';
 
 const request = require('request');
-//const mongoURL = "mongodb://127.0.0.1:27017/";
-const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/remindmebot";
-const dbName = 'remindmebot';
+//const mongoURL = "mongodb://127.0.0.1:27017/remindmebot";
+const mongoURL = process.env.MONGODB_URI;
+//const dbName = 'remindmebot';
 
 const templates = require('./templates');
 const keys = require('../keys');
