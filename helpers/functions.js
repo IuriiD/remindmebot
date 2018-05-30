@@ -1,8 +1,8 @@
 'use strict';
 
 const request = require('request');
-//const mongoURL = "mongodb://127.0.0.1:27017/remindmebot";
-const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/remindmebot";
+//const mongoURL = "mongodb://127.0.0.1:27017/";
+const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/";
 const dbName = 'remindmebot';
 
 const templates = require('./templates');
@@ -116,9 +116,9 @@ const remindersToAlert = () => {
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
-        MongoClient.connect(url, function (err, dbo) {
+        MongoClient.connect(url, function (err, db) {
             if (err) reject(false);
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             // For every collection in DB
             dbo.listCollections().toArray(function (err, collArray) {
@@ -666,10 +666,10 @@ const deleteReminder = (user, reminderDocID) => {
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
-        MongoClient.connect(url, function(err, dbo) {
+        MongoClient.connect(url, function(err, db) {
             if (err) reject(false);
 
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             dbo.collection(user).findOne(
                 {
@@ -732,9 +732,9 @@ const checkForDuplicates = (user, reminderContent, reminderTime) => {
     const MongoClient = require("mongodb").MongoClient;
     const url = mongoURL;
 
-    MongoClient.connect(url, function(err, dbo) {
+    MongoClient.connect(url, function(err, db) {
         if (err) throw err;
-        //const dbo = db.db(dbName);
+        const dbo = db.db(dbName);
         dbo.collection(user).findOne(
             {
                 reminderContent: reminderContent,
@@ -765,9 +765,9 @@ const clearAllReminders = (user) => {
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
-        MongoClient.connect(url, function (err, dbo) {
+        MongoClient.connect(url, function (err, db) {
             if (err) reject(false);
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             dbo.listCollections({name: user}).next(function (err, collinfo) {
                 if (collinfo) {
@@ -803,9 +803,9 @@ const allUsersRemindersFromDB = (userID) => {
         const MongoClient = require("mongodb").MongoClient;
         const url = mongoURL;
 
-        MongoClient.connect(url, function (err, dbo) {
+        MongoClient.connect(url, function (err, db) {
             if (err) reject(false);
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             dbo.collection(userID).find({}).toArray(function (err, remindersArr) {
                 if (err) reject(false);
@@ -831,9 +831,9 @@ const showAllReminders4Today = (user) => {
 
         let todaysRemindersIDs = [];
 
-        MongoClient.connect(url, function(err, dbo) {
+        MongoClient.connect(url, function(err, db) {
             if (err) reject(false);
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             dbo.collection(user).find({}).toArray(function(err, result) {
                 if (err) reject(false);
@@ -934,9 +934,9 @@ const snoozeReminder = (user, reminderDocID, snoozeForMin) => {
         const url = mongoURL;
         const ObjectId = require('mongodb').ObjectID;
 //
-        MongoClient.connect(url, function (err, dbo) {
+        MongoClient.connect(url, function (err, db) {
             if (err) throw err;
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             console.log("reminderDocID: " + reminderDocID);
             dbo.collection(user).updateOne({"_id": new ObjectId(reminderDocID)}, {$set: {"snoozedToTime": snoozedToTime}}, function (err, res) {
@@ -976,9 +976,9 @@ const confirmReminder = (user, reminderDocID) => {
         const todaysDateStr = `${todaysYear}-${todaysMonth}-${todaysDate}`;
 
         const myQuery = {"_id": new ObjectId(reminderDocID)};
-        MongoClient.connect(url, function(err, dbo) {
+        MongoClient.connect(url, function(err, db) {
             if (err) throw err;
-            //const dbo = db.db(dbName);
+            const dbo = db.db(dbName);
 
             dbo.collection(user).findOne(myQuery, function(err, res) {
                 if (err) throw err;
@@ -986,8 +986,8 @@ const confirmReminder = (user, reminderDocID) => {
                     console.log("Here");
                     dbo.collection(user).updateOne(myQuery, {$set: {"reminderConfirmed": todaysDateStr, "snoozedToTime": null}}, function(err, res) {
                         if (err) {
-                            db.close();
                             throw err;
+                            db.close();
                         }
                         if (res) {
                             console.log(`Reminder was confirmed`);
