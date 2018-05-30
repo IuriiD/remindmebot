@@ -6,11 +6,12 @@
     2) no reminders editing (delete and create a new reminder instead if needed);
 */
 
-const API_AI_TOKEN = 'c2a8b983845543e2b0d54018ad01d2d1';
-const apiAiClient = require('apiai')(API_AI_TOKEN);
-
 const functions = require('./functions');
 const templates = require('./templates');
+const keys = require('../keys');
+
+const API_AI_TOKEN = keys.APIAITOKEN;
+const apiAiClient = require('apiai')(API_AI_TOKEN);
 
 const snoozeForMin = 5;
 
@@ -35,7 +36,7 @@ module.exports = (event) => {
 
     let cTime = new Date();
     let utcHours = cTime.getHours();
-    cTime.setUTCHours(utcHours+3)
+    cTime.setUTCHours(utcHours+3);
     console.log('Time on server: ' + cTime);
 
     console.log();
@@ -63,41 +64,47 @@ module.exports = (event) => {
         let AllReminders4Today = [];
         let actionIncomplete = true;
         switch(actionTriggered) {
+
             // Displaying reminders [for today]
             case "reminders.get":
                 speech = "";
-                AllReminders4Today = functions.showAllReminders4Today(senderId);
-                AllReminders4Today.then(function(data) {
-                    if (data.length>0) {
+                functions.showAllReminders4Today(senderId).then(function(data) {
+                    if (data.length > 0) {
+                        console.log();
+                        console.log("AllReminders4Today: " + JSON.stringify(data));
+
                         speech += `Here's what we have for today:\n`;
-                        for (let i=0; i<data.length; i++) {
-                            if (i>0) { speech += "\n\n"; }
-                            speech += `\nReminder # ${i+1}`;
+                        for (let i = 0; i < data.length; i++) {
+                            if (i > 0) {
+                                speech += "\n\n";
+                            }
+                            speech += `\nReminder # ${i + 1}`;
                             speech += `\nTime: ${data[i]["reminderTime"]}`;
                             speech += `\nDescription: ${data[i]["reminderDescription"]}`;
                         }
-
-                        let firstMessage = functions.sendMessage(senderId, {text: speech});
-                        firstMessage.then(result => {
-                            // Button template - buttons "Add/Remove one/Clear all"
-                            buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
-
-                            sendMessage(senderId, buttonTemplate);
-                        })
-
                     } else {
                         speech = "Sorry but you have no reminders for today yet";
-
-                        let firstMessage = functions.sendMessage(senderId, {text: speech});
-                        firstMessage.then(result => {
-                            // Button template - 1 button "Add reminder"
-                            buttonTemplate = templates.buttonsAddReminder;
-
-                            functions.sendMessage(senderId, buttonTemplate);
-                        })
                     }
+                    return speech;
+                })
 
-                });
+                    .then(speech => {
+                        functions.sendMessage(senderId, {text: speech});
+                        if (speech === "Sorry but you have no reminders for today yet") {
+                            buttonTemplate = templates.buttonsAddReminder;
+                        } else {
+                            buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
+                        }
+                        return buttonTemplate;
+                    })
+
+                    .then(buttonTemplate => {
+                        functions.sendMessage(senderId, buttonTemplate);
+                    })
+
+                    .catch(err => {
+                        console.log(`Got error ${err} while displaying reminders for today (functions showAllReminders4Today, sendMessage)`);
+                    });
                 break;
 
             // Saving a reminder
@@ -135,18 +142,30 @@ module.exports = (event) => {
 
                             let firstMessage = functions.sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
-                                // Button template - buttons "ShowReminders/AddReminder"
-                                buttonTemplate = templates.buttonsShowRemindersAddReminder;
 
-                                functions.sendMessage(senderId, buttonTemplate);
+                                if (result) {
+                                    setTimeout(() => {
+                                        // Button template - buttons "ShowReminders/AddReminder"
+                                        buttonTemplate = templates.buttonsShowRemindersAddReminder;
+                                        functions.sendMessage(senderId, buttonTemplate);
+                                        }, 1000
+                                    );
+                                }
+
                             })
                         } else {
                             let firstMessage = functions.sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
-                                // Button template - 1 button "Add reminder"
-                                buttonTemplate = templates.buttonsAddReminder;
 
-                                functions.sendMessage(senderId, buttonTemplate);
+                                if (result) {
+                                    setTimeout(() => {
+                                        // Button template - 1 button "Add reminder"
+                                        buttonTemplate = templates.buttonsAddReminder;
+                                        functions.sendMessage(senderId, buttonTemplate);
+                                        }, 1000
+                                    );
+                                }
+
                             })
 
                         }
@@ -206,12 +225,20 @@ module.exports = (event) => {
                         })
                     })
                         .catch(err => {
-                            // Button template - buttons "Add/Remove one/Clear all"
-                            buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
+
                             speech = "Unfortunately I failed to delete your reminders.. :(\nWhat should I do next?";
                             let firstMessage = functions.sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
-                                functions.sendMessage(senderId, buttonTemplate);
+
+                                if (result) {
+                                    setTimeout(() => {
+                                        // Button template - buttons "Add/Remove one/Clear all"
+                                        buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
+                                        functions.sendMessage(senderId, buttonTemplate);
+                                        }, 1000
+                                    );
+                                }
+
                             })
                         })
                 }
@@ -220,14 +247,21 @@ module.exports = (event) => {
             // Incorrect reminders confirmation is cached by Default Fallback intent
             case "input.unknown":
                 if (contextsList.includes("remove-confirm")) {
-                    // Button template - buttons "Add/Remove one/Clear all"
-                    buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
 
                     speech += "\nSorry, but you didn't provide a correct confirmation. Reminders were not deleted";
 
                     let firstMessage = functions.sendMessage(senderId, {text: speech});
                     firstMessage.then(result => {
-                        functions.sendMessage(senderId, buttonTemplate);
+
+                        if (result) {
+                            setTimeout(() => {
+                                // Button template - buttons "Add/Remove one/Clear all"
+                                buttonTemplate = templates.buttonsAddRemoveOneClearAllReminders;
+                                functions.sendMessage(senderId, buttonTemplate);
+                                }, 1000
+                            );
+                        }
+
                     })
 
                 } else {
@@ -243,13 +277,14 @@ module.exports = (event) => {
             // Deleting at specific reminder
             case "remindersget.deletethisreminder":
                 const reminderNumber = Number(dfResponse.result.contexts[0].parameters.number);
-                if (reminderNumber !== "" && reminderNumber > 0) {
+                if (reminderNumber != "" && reminderNumber > 0) {
                     console.log("Reminder to delete: " + reminderNumber);
 
                     functions.showAllReminders4Today(senderId)
                         .then(remindersArray => {
                             console.log("Got a list of todays reminders, N=" + remindersArray.length);
-                            if (reminderNumber<remindersArray.length) {
+                            console.log("Reminder to delete: " + reminderNumber);
+                            if (reminderNumber<=remindersArray.length) {
                                 let reminderDocID = remindersArray[reminderNumber-1]["reminderID"];
                                 console.log("Reminder to delete has ID " + reminderDocID);
                                 return reminderDocID;
@@ -303,7 +338,14 @@ module.exports = (event) => {
                             }
                             let firstMessage = functions.sendMessage(senderId, {text: speech});
                             firstMessage.then(result => {
-                                functions.sendMessage(senderId, buttonTemplate);
+
+                                if (result) {
+                                    setTimeout(() => {
+                                            functions.sendMessage(senderId, buttonTemplate);
+                                        }, 1000
+                                    );
+                                }
+
                             })
                         })
                         .catch( error => {
@@ -319,41 +361,64 @@ module.exports = (event) => {
             // Confirming reminder
             case "alert.confirm":
                 let whichID = dfResponse.result.parameters.reminderName;
-                console.log();
-                console.log("Confirming reminder #" + whichID);
+
+                console.log("\nConfirming reminder #" + whichID);
+
                 if (whichID) {
-                    let reminderConfirmationFlag = functions.confirmReminder(senderId, whichID);
-                    reminderConfirmationFlag.then(result => {
-                    console.log("reminderConfirmationFlag: " + result);
+                    functions.confirmReminder(senderId, whichID).then(result => {
+
+                        console.log("reminderConfirmationFlag: " + result);
+
+                        let speech = "";
                         if (result) {
-                            functions.sendMessage(senderId, {text: "Reminder confirmed!"});
+                            speech = "Reminder confirmed!";
                         } else {
-                            functions.sendMessage(senderId, {text: "Unfortunately I failed to confirm this reminder. Sorry"});
+                            speech = "Unfortunately I failed to confirm this reminder. Sorry";
                         }
-                        // Button template - buttons "Add/Remove one/Clear all"
-                        buttonTemplate = templates.buttonsShowRemindersAddReminder;
-                        functions.sendMessage(senderId, buttonTemplate);
+                        functions.sendMessage(senderId, {text: speech});
+                        return true;
                     })
+
+                        .then(result =>{
+                            // Button template - buttons "Add/Remove one/Clear all"
+                            buttonTemplate = templates.buttonsShowRemindersAddReminder;
+                            functions.sendMessage(senderId, buttonTemplate);
+                        })
+
+                        .catch(err => {
+                            console.log(`\nGot error ${err} when confirming reminder (functions confirmReminder, sendMessage)`)
+                        });
+
                 }
                 break;
 
             // Snoozing reminder
             case "alert.snooze":
                 let remID = dfResponse.result.parameters.reminderName;
-                console.log();
-                console.log("Snoozing reminder #" + remID);
+
+                console.log("\nSnoozing reminder #" + remID);
+
                 if (remID) {
-                    let reminderSnoozingFlag = functions.snoozeReminder(senderId, remID, snoozeForMin);
-                    reminderSnoozingFlag.then(result => {
+                    functions.snoozeReminder(senderId, remID, snoozeForMin).then(result => {
+                        let speech = "";
                         if (result) {
-                            functions.sendMessage(senderId, {text: `Reminder snoozed for ${snoozeForMin} minutes!`});
+                            speech = `Reminder snoozed for ${snoozeForMin} minutes!`
                         } else {
-                            functions.sendMessage(senderId, {text: "Unfortunately I failed to delay this reminder. Sorry"});
+                            speech = "Unfortunately I failed to delay this reminder. Sorry";
                         }
-                        // Button template - buttons "Add/Remove one/Clear all"
-                        buttonTemplate = templates.buttonsShowRemindersAddReminder;
-                        functions.sendMessage(senderId, buttonTemplate);
+                        functions.sendMessage(senderId, {text: speech});
+                        return true;
                     })
+
+                        .then(result => {
+                            // Button template - buttons "ShowReminders/AddReminder"
+                            buttonTemplate = templates.buttonsShowRemindersAddReminder;
+                            functions.sendMessage(senderId, buttonTemplate);
+                        })
+
+                        .catch(err => {
+                           console.log(`\nGot error ${err} when snoozing reminder (functions snoozeReminder, sendMessage)`)
+                        });
                 }
                 break;
 

@@ -1,15 +1,15 @@
 'use strict';
 
-const FACEBOOK_ACCESS_TOKEN = 'EAATjFac0PR8BAFUhoISYR0W8PSfBtji6fETy3VaZAZCyyM03KJRNSvb8oNPfZCwaENMgO4ypYEF7ZAe3kQ7khNuxGu6HziL2qNIo7pylRMz8ZB6cQZBShkQVBcGZBAvbAIhlvBMfiSZCBca6mrxYQUv4dCvRhvq6Q7L1e3pqmnLt5narraqZCSleFdbwRlTjr33oZD';
-//
 const request = require('request');
 //const mongoURL = "mongodb://127.0.0.1:27017/";
-const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/remindmebot";
+const mongoURL = "mongodb://IuriiD:mlab111@ds137650.mlab.com:37650/";
+    //remindmebot";
 const dbName = 'remindmebot';
 
 const templates = require('./templates');
+const keys = require('../keys');
 
-
+const FACEBOOK_ACCESS_TOKEN = keys.FBTOKEN;
 /*
     Inserts a document to collection 'user' in DB 'remindmebot'
     reminderDescription - what to remind about (any text); required
@@ -102,6 +102,7 @@ const remindersToAlert = () => {
         let todaysDateStr = null;
         let reminderTime = "";
         let allReminderToAlert = [];
+        let originalReminderTime = "";
 
         const currTime = new Date();
         currTime.setHours(currTime.getHours() + 3); // to change from UTC/GMT to GMT+3
@@ -144,6 +145,7 @@ const remindersToAlert = () => {
                                     reminderDescription = remindersArr[x]["reminderDescription"];
                                     let reminderID = remindersArr[x]["_id"];
                                     reminderTime = remindersArr[x]["reminderTime"];
+                                    originalReminderTime = remindersArr[x]["reminderTime"];
                                     let reminderWasSet = reminderID.getTimestamp();
                                     let reminderDate = remindersArr[x]["reminderDate"];
                                     let reminderRecurrence = remindersArr[x]["reminderRecurrence"];
@@ -168,7 +170,7 @@ const remindersToAlert = () => {
                                         .then(ifToday => {
                                             if (ifToday && reminderTimeMS < currTimeMS && reminderConfirmed != todaysDateStr) {
 
-                                                let speech = `ALERT!\n\nYou asked to remind you about "${reminderDescription}" at ${reminderTime}`;
+                                                let speech = `ALERT!\n\nYou asked to remind you about "${reminderDescription}" at ${originalReminderTime}`;
 
 
                                                 let newMessage = sendMessage(userID, templates.buttonsConfirmSnooze(speech, reminderID));
@@ -205,8 +207,8 @@ const remindersToAlert = () => {
 const ifReminderIsToday = (reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) => {
     return new Promise((resolve, reject) => {
         // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
-        const today = new Date();
-        today.setUTCHours(today.getHours() + 3);
+        let today = new Date();
+        today.setHours(today.getHours() + 3);
         const todaysDateYear = today.getFullYear();
         const todaysDateMonth = today.getMonth() + 1; // 0-11 >> 1-12
         const todaysDateDate = today.getDate();
@@ -420,6 +422,222 @@ const ifReminderIsToday = (reminderWasSet, reminderTime, reminderDate, reminderR
     });
 };
 
+const ifReminderIsToday1 = (reminderWasSet, reminderTime, reminderDate, reminderRecurrence, snoozedToTime) => {
+        // Get today's date and determine time, day of the week (and if it's a weekend/weekday), date, month
+        let today = new Date();
+        today.setHours(today.getHours() + 3);
+        const todaysDateYear = today.getFullYear();
+        const todaysDateMonth = today.getMonth() + 1; // 0-11 >> 1-12
+        const todaysDateDate = today.getDate();
+        const dayOfWeek = today.getDay(); // 0-6, Sun=0
+        //const currentTime = today.getTime(); // ms - at first I wanted to display only those todays' reminders that were
+        // in future, that is between currentTime and todayEnds, ms
+
+        const todayBeganMS = today.setHours(0, 0, 0, 0);
+        const todayEnds = todayBeganMS + 86400000 - 1; // ms in 1 day
+
+        // Working with reminder's time data
+        if (snoozedToTime) {
+            reminderTime = snoozedToTime;
+        }
+
+        // Parse reminderTime and transform it into ms
+        const reminderTimeHours = reminderTime.split(":")[0];
+        const reminderTimeMinutes = reminderTime.split(":")[1];
+        const reminderTimeMS = new Date().setHours(reminderTimeHours, reminderTimeMinutes, 0, 0);
+
+        // To get day of the week and date reminder was set (for "Weekly" recurrence cases) we need _id field
+        const reminderWasSetDay = reminderWasSet.getDay();
+        const reminderWasSetDate = reminderWasSet.getDate();
+
+        // Parse reminderDate to separate year, month and date
+        let reminderDateYear = "";
+        let reminderDateMonth = "";
+        let reminderDateDay = "";
+        if (reminderDate) {
+            reminderDateYear = reminderDate.split("-")[0];
+            reminderDateMonth = reminderDate.split("-")[1];
+            reminderDateDay = reminderDate.split("-")[2];
+        }
+
+        // Main check-tree
+        // If it's a one-time reminder, check yyyy-mm-dd and then hh:mm
+        if (!reminderRecurrence) {
+            if (reminderDateYear == todaysDateYear &&
+                reminderDateMonth == todaysDateMonth &&
+                reminderDateDay == todaysDateDate) {
+                console.log("It's today! (ifReminderIsToday)");
+                return (reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+            } else {
+                console.log("It's NOT today! (ifReminderIsToday)");
+                return false;
+            }
+
+            // If it's a recurrent reminder
+        } else {
+            switch (reminderRecurrence) {
+                // Daily - check if reminder's time hasn't passed today
+                case "Daily":
+                    if (reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds) {
+                        console.log("It's today! (ifReminderIsToday)");
+                        return true;
+                    };
+
+                // Weekly - check if the day reminder was set === today's day and then check the time
+                case "Weekly":
+                    if (reminderWasSetDay === dayOfWeek) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // Monthly - check if the date reminder was set === today's day and then check the time
+                case "Monthly":
+                    if (reminderWasSetDate === todaysDateDate) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // Weekends - check if today is a weekend and then check the time
+                case "Weekends":
+                    if (dayOfWeek === 6 || dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // Weekdays - check if today is a week day and then check the time
+                case "Weekdays":
+                    if (dayOfWeek > 0 && dayOfWeek < 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays"
+                case "Mondays":
+                    if (dayOfWeek === 1) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Tuesdays"
+                case "Tuesdays":
+                    if (dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Wednesdays"
+                case "Wednesdays":
+                    if (dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Thursdays"
+                case "Thursdays":
+                    if (dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Fridays"
+                case "Fridays":
+                    if (dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Saturdays"
+                case "Saturdays":
+                    if (dayOfWeek === 6) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Sundays"
+                case "Sundays":
+                    if (dayOfWeek === 0) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Tuesdays"
+                case "Mondays, Tuesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Wednesdays"
+                case "Mondays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Fridays"
+                case "Mondays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Tuesdays, Thursdays"
+                case "Mondays, Thursdays":
+                    if (dayOfWeek === 2 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Wednesdays, Fridays"
+                case "Wednesdays, Fridays":
+                    if (dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays"
+                case "Mondays, Tuesdays, Wednesdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Tuesdays, Wednesdays, Thursdays"
+                case "Mondays, Tuesdays, Wednesdays, Thursdays":
+                    if (dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 3 || dayOfWeek === 4) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+
+                // "Mondays, Wednesdays, Fridays"
+                case "Mondays, Wednesdays, Fridays":
+                    if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+                        resolve(reminderTimeMS > todayBeganMS && reminderTimeMS < todayEnds);
+                    } else {
+                        return false;
+                    }
+            }
+        }
+};
+
 /*
     Sends a message to FB Messenger
 */
@@ -434,6 +652,7 @@ const sendMessage = (senderId, ourMessage) => {
                 message: ourMessage,
             }
         });
+        console.log('sendMessage message');
         resolve(true);
     });
 };

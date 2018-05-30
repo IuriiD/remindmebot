@@ -8,3 +8,4 @@
 *else/
 *.git/
 *.idea/
+#*keys.js
