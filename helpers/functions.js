@@ -832,6 +832,7 @@ const showAllReminders4Today = (user) => {
         let todaysRemindersIDs = [];
 
         MongoClient.connect(url, function(err, db) {
+            console.log(db);
             if (err) reject(false);
             const dbo = db.db();
 
